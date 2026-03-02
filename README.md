@@ -14,7 +14,7 @@ PIM.slnx
 │   ├── PIM.Sync.CalDav/       # CalDAV provider (planned)
 │   ├── PIM.Search/            # Local + remote search (planned)
 │   ├── PIM.Server/            # REST + WebSocket daemon (planned)
-│   ├── PIM.SystemInfo/        # Weather, system metrics (planned)
+│   ├── PIM.SystemInfo/        # Power, weather, clock providers
 │   └── PIM.Tui/               # Terminal.Gui client (planned)
 ├── tests/                     # Mirrors src/ with xUnit tests
 ├── sql/                       # SQLite schema migrations
@@ -46,7 +46,7 @@ Copy `config.example.yaml` to `~/.pim/config.yaml` and fill in your account deta
 | 2 | PIM.Sync.Imap | Planned |
 | 2 | PIM.Sync.Graph | Done |
 | 2 | PIM.Sync.CalDav | Planned |
-| 2 | PIM.SystemInfo | Planned |
+| 2 | PIM.SystemInfo | Done |
 | 3 | PIM.Search | Planned |
 | 3 | PIM.Server | Planned |
 | 4 | PIM.Tui | Planned |

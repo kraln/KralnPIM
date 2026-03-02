@@ -18,13 +18,14 @@ All code must compile with zero errors and zero warnings (except the known IL305
 - All async methods accept `CancellationToken` as the last parameter
 - Records for models, sealed where possible
 - Nullable reference types enabled everywhere
-- Provider interfaces defined in `PIM.Core/Providers/` — implementations in separate `PIM.Sync.*` projects
+- Provider interfaces defined in `PIM.Core/Providers/` — implementations in separate `PIM.Sync.*` / `PIM.SystemInfo` projects
 
 ## Architecture
 
 - `PIM.Core` — shared kernel: models, interfaces, config, repositories, serialization
 - `PIM.Sync.*` — provider implementations (Google, IMAP, O365, CalDAV), each references PIM.Core
-- Providers implement `IMailProvider` and/or `ICalendarProvider`
+- `PIM.SystemInfo` — system providers: power (Linux `/sys/`), weather (Open-Meteo), clock (TimeZoneInfo)
+- Providers implement `IMailProvider`, `ICalendarProvider`, `IPowerInfoProvider`, `IWeatherProvider`, or `IClockProvider`
 - Sync uses delta tokens where the API supports them (`ISyncStateRepository`)
 - OAuth tokens persisted via `IAuthRepository`
 
