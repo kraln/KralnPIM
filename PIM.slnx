@@ -4,11 +4,13 @@
     <Project Path="src/PIM.Sync.Google/PIM.Sync.Google.csproj" />
     <Project Path="src/PIM.Sync.Graph/PIM.Sync.Graph.csproj" />
     <Project Path="src/PIM.SystemInfo/PIM.SystemInfo.csproj" />
+    <Project Path="src/PIM.Sync.CalDav/PIM.Sync.CalDav.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/PIM.Core.Tests/PIM.Core.Tests.csproj" />
     <Project Path="tests/PIM.Sync.Google.Tests/PIM.Sync.Google.Tests.csproj" />
     <Project Path="tests/PIM.Sync.Graph.Tests/PIM.Sync.Graph.Tests.csproj" />
     <Project Path="tests/PIM.SystemInfo.Tests/PIM.SystemInfo.Tests.csproj" />
+    <Project Path="tests/PIM.Sync.CalDav.Tests/PIM.Sync.CalDav.Tests.csproj" />
   </Folder>
 </Solution>

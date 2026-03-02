@@ -27,12 +27,14 @@ All code must compile with zero errors and zero warnings (except the known IL305
 - `PIM.SystemInfo` — system providers: power (Linux `/sys/`), weather (Open-Meteo), clock (TimeZoneInfo)
 - Providers implement `IMailProvider`, `ICalendarProvider`, `IPowerInfoProvider`, `IWeatherProvider`, or `IClockProvider`
 - Sync uses delta tokens where the API supports them (`ISyncStateRepository`)
-- OAuth tokens persisted via `IAuthRepository`
+- CalDAV sync uses ctag/etag diffing — no WebDAV library, hand-rolled HTTP with `HttpClient`
+- OAuth tokens persisted via `IAuthRepository`; CalDAV uses `IAuthRepository.GetImapPasswordAsync` for Basic Auth
 
 ## Key Patterns
 
 - Google API namespace collides with `PIM.Sync.Google` — use `global::Google.GoogleApiException`
 - Graph SDK `AttachmentInfo` collides with `PIM.Core.Models.AttachmentInfo` — use `PimAttachmentInfo` alias
+- Ical.Net `EventStatus` collides with `PIM.Core.Models.EventStatus` — use `PimEventStatus` alias
 - Graph SDK uses `Microsoft.Graph.Me.SendMail` namespace (not `Users.Item.SendMail`)
 - Graph SDK `DaysOfWeek` is `List<DayOfWeekObject?>` (nullable elements); `RecurrenceRange.EndDate` is `Microsoft.Kiota.Abstractions.Date`
 - No custom rate limiter for Graph — SDK's built-in `RetryHandler` handles 429 throttling
