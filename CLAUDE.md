@@ -31,7 +31,11 @@ All code must compile with zero errors and zero warnings (except the known IL305
 ## Key Patterns
 
 - Google API namespace collides with `PIM.Sync.Google` — use `global::Google.GoogleApiException`
+- Graph SDK `AttachmentInfo` collides with `PIM.Core.Models.AttachmentInfo` — use `PimAttachmentInfo` alias
+- Graph SDK uses `Microsoft.Graph.Me.SendMail` namespace (not `Users.Item.SendMail`)
+- Graph SDK `DaysOfWeek` is `List<DayOfWeekObject?>` (nullable elements); `RecurrenceRange.EndDate` is `Microsoft.Kiota.Abstractions.Date`
+- No custom rate limiter for Graph — SDK's built-in `RetryHandler` handles 429 throttling
 - `InternalsVisibleTo` used for test access to internal members
 - `HtmlToTextConverter` in PIM.Sync.Google is reusable by other sync modules
-- `TokenBucketRateLimiter` wraps API calls to respect quota limits
+- `TokenBucketRateLimiter` wraps Google API calls to respect quota limits
 - JSON serialization uses source-generated `PimJsonContext` for AOT compatibility

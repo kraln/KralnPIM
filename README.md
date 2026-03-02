@@ -10,7 +10,7 @@ PIM.slnx
 │   ├── PIM.Core/              # Shared models, interfaces, config, DB schema
 │   ├── PIM.Sync.Google/       # Gmail + Google Calendar provider
 │   ├── PIM.Sync.Imap/         # IMAP/SMTP provider (planned)
-│   ├── PIM.Sync.Graph/        # Office 365 Mail + Calendar (planned)
+│   ├── PIM.Sync.Graph/        # Office 365 Mail + Calendar provider
 │   ├── PIM.Sync.CalDav/       # CalDAV provider (planned)
 │   ├── PIM.Search/            # Local + remote search (planned)
 │   ├── PIM.Server/            # REST + WebSocket daemon (planned)
@@ -44,7 +44,7 @@ Copy `config.example.yaml` to `~/.pim/config.yaml` and fill in your account deta
 | 1 | PIM.Core | Done |
 | 2 | PIM.Sync.Google | Done |
 | 2 | PIM.Sync.Imap | Planned |
-| 2 | PIM.Sync.Graph | Planned |
+| 2 | PIM.Sync.Graph | Done |
 | 2 | PIM.Sync.CalDav | Planned |
 | 2 | PIM.SystemInfo | Planned |
 | 3 | PIM.Search | Planned |
