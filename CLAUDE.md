@@ -39,6 +39,9 @@ All code must compile with zero errors and zero warnings (except the known IL305
 - Graph SDK `DaysOfWeek` is `List<DayOfWeekObject?>` (nullable elements); `RecurrenceRange.EndDate` is `Microsoft.Kiota.Abstractions.Date`
 - No custom rate limiter for Graph — SDK's built-in `RetryHandler` handles 429 throttling
 - `InternalsVisibleTo` used for test access to internal members
-- `HtmlToTextConverter` in PIM.Sync.Google is reusable by other sync modules
+- `HtmlToTextConverter` copied into PIM.Sync.Imap (avoids Google API transitive deps; 89-line trivial duplicate)
+- IMAP sync token format: JSON `{"uidValidity":N,"maxUid":N,"modseq":N}` — CONDSTORE delta when supported, UID fallback otherwise
+- IMAP uses MailKit `IMessageSummary.Envelope` for header mapping; `MimeMessage` for full body/attachment access
+- MimeKit normalizes `InReplyTo` by stripping angle brackets from message IDs
 - `TokenBucketRateLimiter` wraps Google API calls to respect quota limits
 - JSON serialization uses source-generated `PimJsonContext` for AOT compatibility

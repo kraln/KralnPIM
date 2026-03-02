@@ -5,6 +5,7 @@
     <Project Path="src/PIM.Sync.Graph/PIM.Sync.Graph.csproj" />
     <Project Path="src/PIM.SystemInfo/PIM.SystemInfo.csproj" />
     <Project Path="src/PIM.Sync.CalDav/PIM.Sync.CalDav.csproj" />
+    <Project Path="src/PIM.Sync.Imap/PIM.Sync.Imap.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/PIM.Core.Tests/PIM.Core.Tests.csproj" />
@@ -12,5 +13,6 @@
     <Project Path="tests/PIM.Sync.Graph.Tests/PIM.Sync.Graph.Tests.csproj" />
     <Project Path="tests/PIM.SystemInfo.Tests/PIM.SystemInfo.Tests.csproj" />
     <Project Path="tests/PIM.Sync.CalDav.Tests/PIM.Sync.CalDav.Tests.csproj" />
+    <Project Path="tests/PIM.Sync.Imap.Tests/PIM.Sync.Imap.Tests.csproj" />
   </Folder>
 </Solution>
