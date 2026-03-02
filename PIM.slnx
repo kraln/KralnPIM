@@ -1,8 +1,10 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/PIM.Core/PIM.Core.csproj" />
+    <Project Path="src/PIM.Sync.Google/PIM.Sync.Google.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/PIM.Core.Tests/PIM.Core.Tests.csproj" />
+    <Project Path="tests/PIM.Sync.Google.Tests/PIM.Sync.Google.Tests.csproj" />
   </Folder>
 </Solution>
