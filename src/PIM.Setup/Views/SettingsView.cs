@@ -1,5 +1,4 @@
 using PIM.Core.Config;
-using Terminal.Gui.Input;
 using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
 
@@ -208,15 +207,6 @@ internal sealed class SettingsView : View
         };
 
         cancel.Accepting += (_, _) => _app.ShowMainMenu();
-
-        KeyDown += (_, e) =>
-        {
-            if (e == Key.Esc)
-            {
-                _app.ShowMainMenu();
-                e.Handled = true;
-            }
-        };
 
         Add(save, cancel);
     }

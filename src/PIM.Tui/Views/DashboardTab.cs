@@ -89,6 +89,11 @@ internal sealed class DashboardTab : View
 
         Add(_agendaFrame, _systemFrame, _mailFrame);
 
+        // Register Q-to-quit on ListViews so it fires before type-ahead search
+        _app.RegisterQuitKey(_agendaList);
+        _app.RegisterQuitKey(_accountList);
+        _app.RegisterQuitKey(_recentMailList);
+
         // Refresh system info every 60 seconds
         Application.AddTimeout(TimeSpan.FromSeconds(60), () =>
         {

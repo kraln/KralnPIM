@@ -55,7 +55,10 @@ internal sealed class TuiApp : Window
 
         Add(_tabs, _statusLabel);
 
-        // Global keybindings
+        // Remove the default Window Esc → QuitToplevel binding
+        KeyBindings.Remove(Key.Esc);
+
+        // Global keybindings (fires when no child view handles the key)
         KeyDown += (_, e) =>
         {
             if (e == Key.Q && !IsEditing())
@@ -87,6 +90,21 @@ internal sealed class TuiApp : Window
                 }
             });
             _ = _dashboardTab.LoadAsync(CancellationToken.None);
+        };
+    }
+
+    /// <summary>
+    /// Registers the Q-to-quit shortcut on a ListView so it fires before type-ahead search consumes the key.
+    /// </summary>
+    internal void RegisterQuitKey(ListView list)
+    {
+        list.KeyDown += (_, e) =>
+        {
+            if (e == Key.Q && !IsEditing())
+            {
+                Application.RequestStop();
+                e.Handled = true;
+            }
         };
     }
 

@@ -4,6 +4,7 @@ using PIM.Core.Data;
 using PIM.Setup.Config;
 using PIM.Setup.Views;
 using Terminal.Gui.App;
+using Terminal.Gui.Input;
 using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
 
@@ -53,6 +54,21 @@ internal sealed class SetupApp : Window
         };
 
         Add(_statusLabel);
+
+        // Remove the default Window Esc → QuitToplevel binding so child views can use Esc for navigation
+        KeyBindings.Remove(Key.Esc);
+
+        KeyDown += (_, e) =>
+        {
+            if (e == Key.Esc)
+            {
+                if (_currentView is MainMenuView)
+                    ConfirmExit();
+                else
+                    ShowMainMenu();
+                e.Handled = true;
+            }
+        };
 
         Initialized += (_, _) =>
         {

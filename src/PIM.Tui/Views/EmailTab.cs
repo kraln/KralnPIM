@@ -119,8 +119,8 @@ internal sealed class EmailTab : View
 
         Add(_inboxFrame, _readerFrame);
 
-        // Keybindings
-        KeyDown += (_, e) =>
+        // Key handlers go on _inboxList (the focused control) so they fire before ListView's type-ahead search
+        _inboxList.KeyDown += (_, e) =>
         {
             if (e == Key.U)
             {
@@ -183,6 +183,7 @@ internal sealed class EmailTab : View
                 e.Handled = true;
             }
         };
+        _app.RegisterQuitKey(_inboxList);
 
         // Load initial data when tab becomes visible
         Initialized += (_, _) => _ = RefreshInboxAsync(CancellationToken.None);

@@ -83,8 +83,8 @@ internal sealed class CalendarTab : View
 
         Add(_agendaFrame, _timelineFrame);
 
-        // Keybindings
-        KeyDown += (_, e) =>
+        // Key handlers go on ListViews (the focused controls) so they fire before type-ahead search
+        void HandleCalendarKey(object? sender, Key e)
         {
             if (e == Key.CursorLeft)
             {
@@ -112,7 +112,15 @@ internal sealed class CalendarTab : View
                     TryEditSelectedEvent();
                 e.Handled = true;
             }
-        };
+        }
+
+        _agendaList.KeyDown += HandleCalendarKey;
+        _app.RegisterQuitKey(_agendaList);
+        for (var i = 0; i < 4; i++)
+        {
+            _dayLists[i].KeyDown += HandleCalendarKey;
+            _app.RegisterQuitKey(_dayLists[i]);
+        }
 
         Initialized += (_, _) => _ = RefreshAsync(CancellationToken.None);
     }

@@ -15,7 +15,8 @@ PIM.slnx
 │   ├── PIM.Search/            # Local FTS + remote deep search
 │   ├── PIM.Server/            # REST API + WebSocket daemon
 │   ├── PIM.SystemInfo/        # Power, weather, clock providers
-│   └── PIM.Tui/               # Terminal.Gui TUI client
+│   ├── PIM.Tui/               # Terminal.Gui TUI client
+│   └── PIM.Setup/             # Interactive configuration TUI
 ├── tests/                     # Mirrors src/ with xUnit tests
 ├── sql/                       # SQLite schema migrations
 ├── config.example.yaml        # Sample configuration
@@ -50,9 +51,17 @@ dotnet run --project src/PIM.Tui
 
 Optional flags: `--rest-url http://host:port` and `--ws-url ws://host:port/ws` (defaults to localhost 9400/9401).
 
+## Running Setup
+
+```sh
+dotnet run --project src/PIM.Setup
+```
+
+Interactive TUI for configuring accounts, settings, and running connection tests. Creates `~/.pim/config.yaml` and initializes the database. Optional flag: `--config-path /path/to/config.yaml`.
+
 ## Configuration
 
-Copy `config.example.yaml` to `~/.pim/config.yaml` and fill in your account details. See the file for supported account types (IMAP, Google, Office 365) and options.
+Copy `config.example.yaml` to `~/.pim/config.yaml` and fill in your account details, or use `PIM.Setup` for guided configuration. See the file for supported account types (IMAP, Google, Office 365, CalDAV) and options.
 
 ## Status
 
@@ -67,3 +76,4 @@ Copy `config.example.yaml` to `~/.pim/config.yaml` and fill in your account deta
 | 3 | PIM.Search | Done |
 | 3 | PIM.Server | Done |
 | 4 | PIM.Tui | Done |
+| 5 | PIM.Setup | Done |

@@ -53,7 +53,8 @@ internal sealed class AccountListView : View
 
         _list.Accepting += (_, _) => EditSelected();
 
-        KeyDown += (_, e) =>
+        // Key handlers go on _list (the focused control) so they fire before ListView's type-ahead search
+        _list.KeyDown += (_, e) =>
         {
             if (e == Key.A)
             {
@@ -73,11 +74,6 @@ internal sealed class AccountListView : View
             else if (e == Key.D)
             {
                 DeleteSelected();
-                e.Handled = true;
-            }
-            else if (e == Key.Esc)
-            {
-                _app.ShowMainMenu();
                 e.Handled = true;
             }
         };

@@ -11,7 +11,6 @@ using PIM.Core.Config;
 using PIM.Core.Data;
 using PIM.Setup.Auth;
 using Terminal.Gui.App;
-using Terminal.Gui.Input;
 using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
 
@@ -53,16 +52,6 @@ internal sealed class ConnectionTestView : View
         close.Accepting += (_, _) => _app.ShowMainMenu();
 
         Add(header, _output, close);
-
-        KeyDown += (_, e) =>
-        {
-            if (e == Key.Esc)
-            {
-                _cts?.Cancel();
-                _app.ShowMainMenu();
-                e.Handled = true;
-            }
-        };
 
         Initialized += (_, _) =>
         {
@@ -375,6 +364,13 @@ internal sealed class ConnectionTestView : View
         }
 
         AppendLine("  CalDAV: Done");
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+            _cts?.Cancel();
+        base.Dispose(disposing);
     }
 
     private void AppendLine(string line)

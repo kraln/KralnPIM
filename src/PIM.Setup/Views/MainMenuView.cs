@@ -56,7 +56,8 @@ internal sealed class MainMenuView : View
 
         Add(header, list);
 
-        KeyDown += (_, e) =>
+        // Key handlers go on list (the focused control) so they fire before ListView's type-ahead search
+        list.KeyDown += (_, e) =>
         {
             var idx = -1;
             if (e == new Key('1')) idx = 0;
