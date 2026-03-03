@@ -27,6 +27,7 @@ All code must compile with zero errors and zero warnings (except the known IL305
 - `PIM.SystemInfo` — system providers: power (Linux `/sys/`), weather (Open-Meteo), clock (TimeZoneInfo)
 - `PIM.Search` — unified search: local FTS5 via `IEmailRepository.SearchAsync`, deep search fans out to all `IMailProvider.RemoteSearchAsync` in parallel with MessageId dedup
 - `PIM.Server` — ASP.NET Core Minimal API daemon: REST (port 9400) + WebSocket (port 9401) on a single Kestrel host with dual listeners
+- `PIM.Tui` — Terminal.Gui v2 TUI client: pure REST/WebSocket client referencing only PIM.Core (not PIM.Server)
 - Providers implement `IMailProvider`, `ICalendarProvider`, `IPowerInfoProvider`, `IWeatherProvider`, or `IClockProvider`
 - `ISearchService` defined in `PIM.Core/Providers/`, implemented in `PIM.Search`
 - Sync uses delta tokens where the API supports them (`ISyncStateRepository`)
@@ -55,3 +56,7 @@ All code must compile with zero errors and zero warnings (except the known IL305
 - `WebSocketBroadcaster` pushes `mail.sync`, `calendar.sync`, `status.change` events to connected clients
 - Server dual-port routing: middleware checks `context.Connection.LocalPort` to distinguish REST vs WS traffic
 - `PIM.Server.csproj` requires `AllowMissingPrunePackageData` for .NET 10 preview compatibility
+- `PIM.Tui` has its own `TuiJsonContext` for TUI-local types, chained with `PimJsonContext` via `TypeInfoResolverChain`
+- `PIM.Tui` duplicates server API model records (MailDetail, AccountOverview, etc.) to avoid referencing PIM.Server/ASP.NET Core
+- Terminal.Gui v2 (`2.0.0-develop.5027`): use `Key.*` (not `KeyCode`), `Initialized` (not `Ready`), `SetSource(ObservableCollection<T>)`, `DateField.Value`/`TimeField.Value`/`CheckBox.Value`, `ListView.ValueChanged` with `e.NewValue`
+- `ComboBox` is deprecated in Terminal.Gui v2 but still functional; `Application.Invoke()` is marked obsolete — both produce warnings only

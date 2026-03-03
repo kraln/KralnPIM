@@ -15,7 +15,7 @@ PIM.slnx
 │   ├── PIM.Search/            # Local FTS + remote deep search
 │   ├── PIM.Server/            # REST API + WebSocket daemon
 │   ├── PIM.SystemInfo/        # Power, weather, clock providers
-│   └── PIM.Tui/               # Terminal.Gui client (planned)
+│   └── PIM.Tui/               # Terminal.Gui TUI client
 ├── tests/                     # Mirrors src/ with xUnit tests
 ├── sql/                       # SQLite schema migrations
 ├── config.example.yaml        # Sample configuration
@@ -42,6 +42,14 @@ dotnet run --project src/PIM.Server -- ~/.pim/config.yaml
 
 REST API on port 9400, WebSocket on port 9401 (configurable in `config.yaml`).
 
+## Running the TUI
+
+```sh
+dotnet run --project src/PIM.Tui
+```
+
+Optional flags: `--rest-url http://host:port` and `--ws-url ws://host:port/ws` (defaults to localhost 9400/9401).
+
 ## Configuration
 
 Copy `config.example.yaml` to `~/.pim/config.yaml` and fill in your account details. See the file for supported account types (IMAP, Google, Office 365) and options.
@@ -58,4 +66,4 @@ Copy `config.example.yaml` to `~/.pim/config.yaml` and fill in your account deta
 | 2 | PIM.SystemInfo | Done |
 | 3 | PIM.Search | Done |
 | 3 | PIM.Server | Done |
-| 4 | PIM.Tui | Planned |
+| 4 | PIM.Tui | Done |

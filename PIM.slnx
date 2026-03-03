@@ -8,6 +8,7 @@
     <Project Path="src/PIM.Sync.Imap/PIM.Sync.Imap.csproj" />
     <Project Path="src/PIM.Search/PIM.Search.csproj" />
     <Project Path="src/PIM.Server/PIM.Server.csproj" />
+    <Project Path="src/PIM.Tui/PIM.Tui.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/PIM.Core.Tests/PIM.Core.Tests.csproj" />
@@ -18,5 +19,6 @@
     <Project Path="tests/PIM.Sync.Imap.Tests/PIM.Sync.Imap.Tests.csproj" />
     <Project Path="tests/PIM.Search.Tests/PIM.Search.Tests.csproj" />
     <Project Path="tests/PIM.Server.Tests/PIM.Server.Tests.csproj" />
+    <Project Path="tests/PIM.Tui.Tests/PIM.Tui.Tests.csproj" />
   </Folder>
 </Solution>
