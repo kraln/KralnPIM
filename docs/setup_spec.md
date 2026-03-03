@@ -141,7 +141,7 @@ Status line at top shows:
 
 "Save & Exit" validates the config (same rules as `ConfigLoader.Validate`), writes YAML, ensures DB is initialized, then exits. If validation fails, show errors and stay.
 
-"Exit" without saving prompts via `MessageBox.Query` if there are unsaved changes.
+"Exit" without saving uses a two-press confirmation if there are unsaved changes: first press shows a status bar warning, second press exits.
 
 ### 3.3 AccountListView
 
@@ -166,19 +166,10 @@ Key bindings:
 - `A` — Add new account (opens AccountWizardView)
 - `E` — Edit selected account (opens AccountWizardView pre-filled)
 - `T` — Test selected account (opens ConnectionTestView)
-- `D` — Delete selected account (confirmation dialog)
+- `D` — Delete selected account (two-press confirmation: first press shows status bar warning, second press deletes)
 - `Esc` — Return to main menu
 
-**Delete confirmation:**
-```
-Remove account 'personal-imap'?
-
-[X] Also delete stored credentials from database
-
-        [Yes]    [No]
-```
-
-Removes account from in-memory config. If checkbox is checked, also deletes from `oauth_tokens` and `imap_credentials` tables. Does NOT delete synced email/calendar data (separate concern).
+On deletion, removes account from in-memory config and deletes stored credentials from `oauth_tokens` and `imap_credentials` tables (best-effort). Does NOT delete synced email/calendar data (separate concern).
 
 ---
 
@@ -201,7 +192,7 @@ Multi-step form within `AccountWizardView`. Each step validates before allowing 
                                              [Next]   [Cancel]
 ```
 
-`RadioGroup` with 4 options. Selection determines subsequent steps:
+`ListView` with 4 options (RadioGroup does not exist in Terminal.Gui v2). Selection determines subsequent steps:
 - IMAP: 4 steps (type → fields → password → auth+test)
 - Google: 3 steps (type → fields → auth+test)
 - O365: 3 steps (type → fields → auth+test)

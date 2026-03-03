@@ -9,6 +9,7 @@
     <Project Path="src/PIM.Search/PIM.Search.csproj" />
     <Project Path="src/PIM.Server/PIM.Server.csproj" />
     <Project Path="src/PIM.Tui/PIM.Tui.csproj" />
+    <Project Path="src/PIM.Setup/PIM.Setup.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/PIM.Core.Tests/PIM.Core.Tests.csproj" />
@@ -20,5 +21,6 @@
     <Project Path="tests/PIM.Search.Tests/PIM.Search.Tests.csproj" />
     <Project Path="tests/PIM.Server.Tests/PIM.Server.Tests.csproj" />
     <Project Path="tests/PIM.Tui.Tests/PIM.Tui.Tests.csproj" />
+    <Project Path="tests/PIM.Setup.Tests/PIM.Setup.Tests.csproj" />
   </Folder>
 </Solution>
