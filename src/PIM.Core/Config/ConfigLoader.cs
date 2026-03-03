@@ -87,6 +87,7 @@ public static class ConfigLoader
         "imap" => AccountType.Imap,
         "google" => AccountType.Google,
         "office365" => AccountType.Office365,
+        "caldav" => AccountType.CalDav,
         _ => throw new ConfigValidationException([$"Unknown account type: '{type}'"])
     };
 
@@ -147,6 +148,13 @@ public static class ConfigLoader
                         errors.Add($"Account '{account.Id}': 'tenant_id' is required for Office365 accounts.");
                     if (string.IsNullOrWhiteSpace(account.ClientId))
                         errors.Add($"Account '{account.Id}': 'client_id' is required for Office365 accounts.");
+                    break;
+
+                case AccountType.CalDav:
+                    if (string.IsNullOrWhiteSpace(account.Username))
+                        errors.Add($"Account '{account.Id}': 'username' is required for CalDAV accounts.");
+                    if (account.Calendars is null || account.Calendars.Count == 0)
+                        errors.Add($"Account '{account.Id}': at least one calendar is required for CalDAV accounts.");
                     break;
             }
 

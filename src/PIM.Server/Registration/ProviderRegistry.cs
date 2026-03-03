@@ -91,6 +91,9 @@ public class ProviderRegistry
             case AccountType.Imap:
                 await BuildImapProvidersAsync(account, authRepo, syncStateRepo, loggerFactory, httpClientFactory, ct);
                 break;
+            case AccountType.CalDav:
+                await BuildCalDavProvidersAsync(account, authRepo, syncStateRepo, loggerFactory, httpClientFactory, ct);
+                break;
         }
     }
 
@@ -162,8 +165,23 @@ public class ProviderRegistry
         _mailProviders[account.Id] = new ImapMailProvider(
             account.Id, connMgr, syncStateRepo,
             loggerFactory.CreateLogger<ImapMailProvider>());
+    }
 
-        // CalDAV calendars associated with this IMAP account
+    private async Task BuildCalDavProvidersAsync(
+        AccountConfig account,
+        IAuthRepository authRepo,
+        ISyncStateRepository syncStateRepo,
+        ILoggerFactory loggerFactory,
+        IHttpClientFactory httpClientFactory,
+        CancellationToken ct)
+    {
+        var password = await authRepo.GetCalDavPasswordAsync(account.Id, ct);
+        if (password is null)
+        {
+            _logger.LogWarning("No password found for CalDAV account {AccountId}, skipping", account.Id);
+            return;
+        }
+
         var calendars = new List<ICalendarProvider>();
         foreach (var calConfig in account.Calendars ?? [])
         {

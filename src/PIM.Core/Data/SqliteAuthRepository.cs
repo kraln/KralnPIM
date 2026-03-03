@@ -69,4 +69,29 @@ public sealed class SqliteAuthRepository : IAuthRepository
         var result = await cmd.ExecuteScalarAsync(ct);
         return result as string;
     }
+
+    // CalDAV passwords share the imap_credentials table — account IDs are unique across types
+    public Task SaveCalDavPasswordAsync(string accountId, string password, CancellationToken ct = default) =>
+        SaveImapPasswordAsync(accountId, password, ct);
+
+    public Task<string?> GetCalDavPasswordAsync(string accountId, CancellationToken ct = default) =>
+        GetImapPasswordAsync(accountId, ct);
+
+    public async Task DeletePasswordAsync(string accountId, CancellationToken ct = default)
+    {
+        using var conn = _factory.CreateConnection();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM imap_credentials WHERE account_id = @aid";
+        cmd.Parameters.AddWithValue("@aid", accountId);
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    public async Task DeleteOAuthTokenAsync(string accountId, CancellationToken ct = default)
+    {
+        using var conn = _factory.CreateConnection();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM oauth_tokens WHERE account_id = @aid";
+        cmd.Parameters.AddWithValue("@aid", accountId);
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
 }

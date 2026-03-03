@@ -82,4 +82,45 @@ public class SqliteAuthRepositoryTests : IDisposable
         var result = await _repo.GetImapPasswordAsync("nonexistent");
         Assert.Null(result);
     }
+
+    [Fact]
+    public async Task SaveAndGetCalDavPassword_RoundTrip()
+    {
+        await _repo.SaveCalDavPasswordAsync("caldav-1", "caldav-secret");
+        var result = await _repo.GetCalDavPasswordAsync("caldav-1");
+
+        Assert.Equal("caldav-secret", result);
+    }
+
+    [Fact]
+    public async Task CalDavAndImapPasswords_SeparateByAccountId()
+    {
+        await _repo.SaveImapPasswordAsync("imap-acc", "imap-pass");
+        await _repo.SaveCalDavPasswordAsync("caldav-acc", "caldav-pass");
+
+        Assert.Equal("imap-pass", await _repo.GetImapPasswordAsync("imap-acc"));
+        Assert.Equal("caldav-pass", await _repo.GetCalDavPasswordAsync("caldav-acc"));
+        Assert.Null(await _repo.GetImapPasswordAsync("caldav-acc-other"));
+    }
+
+    [Fact]
+    public async Task DeletePassword_RemovesCredential()
+    {
+        await _repo.SaveImapPasswordAsync("acc-1", "password");
+        Assert.NotNull(await _repo.GetImapPasswordAsync("acc-1"));
+
+        await _repo.DeletePasswordAsync("acc-1");
+        Assert.Null(await _repo.GetImapPasswordAsync("acc-1"));
+    }
+
+    [Fact]
+    public async Task DeleteOAuthToken_RemovesToken()
+    {
+        await _repo.SaveOAuthTokenAsync(new OAuthToken("acc-1", "access", "refresh",
+            DateTimeOffset.UtcNow.AddHours(1)));
+        Assert.NotNull(await _repo.GetOAuthTokenAsync("acc-1"));
+
+        await _repo.DeleteOAuthTokenAsync("acc-1");
+        Assert.Null(await _repo.GetOAuthTokenAsync("acc-1"));
+    }
 }

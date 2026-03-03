@@ -14,7 +14,7 @@ public class ConfigLoaderTests
     {
         var config = ConfigLoader.Load(GetTestConfigPath("valid_full.yaml"));
 
-        Assert.Equal(3, config.Accounts.Count);
+        Assert.Equal(4, config.Accounts.Count);
 
         var imap = config.Accounts[0];
         Assert.Equal("personal-imap", imap.Id);
@@ -26,11 +26,6 @@ public class ConfigLoaderTests
         Assert.Equal("mail.example.com", imap.SmtpHost);
         Assert.Equal(587, imap.SmtpPort);
         Assert.Equal("user@example.com", imap.Username);
-        Assert.NotNull(imap.Calendars);
-        Assert.Single(imap.Calendars);
-        Assert.Equal("personal-caldav", imap.Calendars[0].Id);
-        Assert.Equal(CalendarType.CalDav, imap.Calendars[0].Type);
-        Assert.Equal("https://radicale.example.com/user/calendar.ics", imap.Calendars[0].Url);
 
         var google = config.Accounts[1];
         Assert.Equal("work-google", google.Id);
@@ -43,6 +38,17 @@ public class ConfigLoaderTests
         Assert.Equal(AccountType.Office365, o365.Type);
         Assert.Equal("xxxx-xxxx", o365.TenantId);
         Assert.Equal("xxxx-xxxx", o365.ClientId);
+
+        var caldav = config.Accounts[3];
+        Assert.Equal("my-radicale", caldav.Id);
+        Assert.Equal(AccountType.CalDav, caldav.Type);
+        Assert.Equal("Radicale", caldav.DisplayName);
+        Assert.Equal("user@example.com", caldav.Username);
+        Assert.NotNull(caldav.Calendars);
+        Assert.Single(caldav.Calendars);
+        Assert.Equal("personal-caldav", caldav.Calendars[0].Id);
+        Assert.Equal(CalendarType.CalDav, caldav.Calendars[0].Type);
+        Assert.Equal("https://radicale.example.com/user/calendar.ics", caldav.Calendars[0].Url);
 
         Assert.Equal("America/New_York", config.Ui.TimezonePrimary);
         Assert.Equal("Europe/London", config.Ui.TimezoneSecondary);
@@ -152,5 +158,45 @@ public class ConfigLoaderTests
         var ex = Assert.Throws<ConfigValidationException>(() =>
             ConfigLoader.LoadFromString("{}"));
         Assert.Contains(ex.Errors, e => e.Contains("At least one account"));
+    }
+
+    [Fact]
+    public void Load_CalDavNoCalendar_ThrowsValidation()
+    {
+        var ex = Assert.Throws<ConfigValidationException>(() =>
+            ConfigLoader.Load(GetTestConfigPath("invalid_caldav_no_calendar.yaml")));
+        Assert.Contains(ex.Errors, e => e.Contains("at least one calendar"));
+    }
+
+    [Fact]
+    public void Load_CalDavNoUsername_ThrowsValidation()
+    {
+        var yaml = """
+            accounts:
+              - id: "my-caldav"
+                type: caldav
+                display_name: "CalDAV"
+                calendars:
+                  - id: "cal1"
+                    type: caldav
+                    url: "https://example.com/cal.ics"
+            ui:
+              timezone_primary: "UTC"
+            system:
+              weather_provider: "open-meteo"
+            storage:
+              db_path: "~/.pim/pim.db"
+              attachment_download_dir: "~/Downloads"
+              buffer_months_back: 3
+              buffer_months_forward: 3
+            server:
+              listen_address: "127.0.0.1"
+              rest_port: 9400
+              ws_port: 9401
+            """;
+
+        var ex = Assert.Throws<ConfigValidationException>(() =>
+            ConfigLoader.LoadFromString(yaml));
+        Assert.Contains(ex.Errors, e => e.Contains("username") && e.Contains("CalDAV"));
     }
 }

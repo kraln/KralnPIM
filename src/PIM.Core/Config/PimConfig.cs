@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 namespace PIM.Core.Config;
 
 [JsonConverter(typeof(JsonStringEnumConverter<AccountType>))]
-public enum AccountType { Imap, Google, Office365 }
+public enum AccountType { Imap, Google, Office365, CalDav }
 
 [JsonConverter(typeof(JsonStringEnumConverter<CalendarType>))]
 public enum CalendarType { CalDav, Google, Office365 }
