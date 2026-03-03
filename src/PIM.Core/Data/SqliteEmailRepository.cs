@@ -161,6 +161,28 @@ public sealed class SqliteEmailRepository : IEmailRepository
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
+    public async Task<List<EmailHeader>> SearchAsync(string query, int limit, CancellationToken ct = default)
+    {
+        using var conn = _factory.CreateConnection();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            SELECT eh.*
+            FROM email_fts fts
+            JOIN email_headers eh ON eh.rowid = fts.rowid
+            WHERE email_fts MATCH @query
+            ORDER BY rank
+            LIMIT @limit
+            """;
+        cmd.Parameters.AddWithValue("@query", query);
+        cmd.Parameters.AddWithValue("@limit", limit);
+
+        var results = new List<EmailHeader>();
+        using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+            results.Add(ReadHeader(reader));
+        return results;
+    }
+
     private static EmailHeader ReadHeader(SqliteDataReader reader)
     {
         return new EmailHeader(

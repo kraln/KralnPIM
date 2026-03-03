@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowMissingPrunePackageData>true</AllowMissingPrunePackageData>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="PIM.Server.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PIM.Core\PIM.Core.csproj" />
+    <ProjectReference Include="..\PIM.Search\PIM.Search.csproj" />
+    <ProjectReference Include="..\PIM.Sync.Google\PIM.Sync.Google.csproj" />
+    <ProjectReference Include="..\PIM.Sync.Imap\PIM.Sync.Imap.csproj" />
+    <ProjectReference Include="..\PIM.Sync.Graph\PIM.Sync.Graph.csproj" />
+    <ProjectReference Include="..\PIM.Sync.CalDav\PIM.Sync.CalDav.csproj" />
+    <ProjectReference Include="..\PIM.SystemInfo\PIM.SystemInfo.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -12,4 +12,5 @@ public interface IEmailRepository
     Task SetReadAsync(string messageId, bool isRead, CancellationToken ct = default);
     Task SetFlaggedAsync(string messageId, bool isFlagged, CancellationToken ct = default);
     Task PurgeOlderThanAsync(DateTimeOffset cutoff, CancellationToken ct = default);
+    Task<List<EmailHeader>> SearchAsync(string query, int limit, CancellationToken ct = default);
 }

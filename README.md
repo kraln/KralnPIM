@@ -12,8 +12,8 @@ PIM.slnx
 │   ├── PIM.Sync.Imap/         # IMAP/SMTP provider
 │   ├── PIM.Sync.Graph/        # Office 365 Mail + Calendar provider
 │   ├── PIM.Sync.CalDav/       # CalDAV calendar provider
-│   ├── PIM.Search/            # Local + remote search (planned)
-│   ├── PIM.Server/            # REST + WebSocket daemon (planned)
+│   ├── PIM.Search/            # Local FTS + remote deep search
+│   ├── PIM.Server/            # REST API + WebSocket daemon
 │   ├── PIM.SystemInfo/        # Power, weather, clock providers
 │   └── PIM.Tui/               # Terminal.Gui client (planned)
 ├── tests/                     # Mirrors src/ with xUnit tests
@@ -25,6 +25,7 @@ PIM.slnx
 ## Requirements
 
 - .NET 10 SDK
+- ASP.NET Core 10 runtime (for PIM.Server)
 
 ## Build & Test
 
@@ -32,6 +33,14 @@ PIM.slnx
 dotnet build PIM.slnx
 dotnet test PIM.slnx
 ```
+
+## Running the Daemon
+
+```sh
+dotnet run --project src/PIM.Server -- ~/.pim/config.yaml
+```
+
+REST API on port 9400, WebSocket on port 9401 (configurable in `config.yaml`).
 
 ## Configuration
 
@@ -47,6 +56,6 @@ Copy `config.example.yaml` to `~/.pim/config.yaml` and fill in your account deta
 | 2 | PIM.Sync.Graph | Done |
 | 2 | PIM.Sync.CalDav | Done |
 | 2 | PIM.SystemInfo | Done |
-| 3 | PIM.Search | Planned |
-| 3 | PIM.Server | Planned |
+| 3 | PIM.Search | Done |
+| 3 | PIM.Server | Done |
 | 4 | PIM.Tui | Planned |

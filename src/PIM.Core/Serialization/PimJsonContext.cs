@@ -21,6 +21,12 @@ namespace PIM.Core.Serialization;
 [JsonSerializable(typeof(OutboundEmail))]
 [JsonSerializable(typeof(EmailListQuery))]
 [JsonSerializable(typeof(List<string>))]
+[JsonSerializable(typeof(SearchResult))]
+[JsonSerializable(typeof(SearchScope))]
+[JsonSerializable(typeof(PowerInfo))]
+[JsonSerializable(typeof(WeatherInfo))]
+[JsonSerializable(typeof(ClockInfo))]
+[JsonSerializable(typeof(List<TimeZoneDisplay>))]
 public partial class PimJsonContext : JsonSerializerContext
 {
 }

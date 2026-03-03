@@ -25,7 +25,10 @@ All code must compile with zero errors and zero warnings (except the known IL305
 - `PIM.Core` — shared kernel: models, interfaces, config, repositories, serialization
 - `PIM.Sync.*` — provider implementations (Google, IMAP, O365, CalDAV), each references PIM.Core
 - `PIM.SystemInfo` — system providers: power (Linux `/sys/`), weather (Open-Meteo), clock (TimeZoneInfo)
+- `PIM.Search` — unified search: local FTS5 via `IEmailRepository.SearchAsync`, deep search fans out to all `IMailProvider.RemoteSearchAsync` in parallel with MessageId dedup
+- `PIM.Server` — ASP.NET Core Minimal API daemon: REST (port 9400) + WebSocket (port 9401) on a single Kestrel host with dual listeners
 - Providers implement `IMailProvider`, `ICalendarProvider`, `IPowerInfoProvider`, `IWeatherProvider`, or `IClockProvider`
+- `ISearchService` defined in `PIM.Core/Providers/`, implemented in `PIM.Search`
 - Sync uses delta tokens where the API supports them (`ISyncStateRepository`)
 - CalDAV sync uses ctag/etag diffing — no WebDAV library, hand-rolled HTTP with `HttpClient`
 - OAuth tokens persisted via `IAuthRepository`; CalDAV uses `IAuthRepository.GetImapPasswordAsync` for Basic Auth
@@ -45,3 +48,10 @@ All code must compile with zero errors and zero warnings (except the known IL305
 - MimeKit normalizes `InReplyTo` by stripping angle brackets from message IDs
 - `TokenBucketRateLimiter` wraps Google API calls to respect quota limits
 - JSON serialization uses source-generated `PimJsonContext` for AOT compatibility
+- `PIM.Server` has its own `ServerJsonContext` for server-specific types (API models, WS events)
+- `ProviderRegistry` builds provider instances per account from config — methods are `virtual` (not sealed) for NSubstitute mocking in tests
+- `SyncScheduler` is a `BackgroundService` with `PeriodicTimer` (5 min default); `AccountSyncWorker` handles per-account sync with 3-retry exponential backoff
+- `AccountStatusTracker` tracks online/offline per account in-memory; REST API returns 503 for writes to offline accounts
+- `WebSocketBroadcaster` pushes `mail.sync`, `calendar.sync`, `status.change` events to connected clients
+- Server dual-port routing: middleware checks `context.Connection.LocalPort` to distinguish REST vs WS traffic
+- `PIM.Server.csproj` requires `AllowMissingPrunePackageData` for .NET 10 preview compatibility
