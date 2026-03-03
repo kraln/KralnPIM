@@ -76,8 +76,8 @@ internal sealed class ComposeView : View
         _sendButton = new Button { X = 0, Y = Pos.AnchorEnd(1), Text = "Send (Ctrl+S)" };
         _cancelButton = new Button { X = Pos.Right(_sendButton) + 2, Y = Pos.AnchorEnd(1), Text = "Cancel (Esc)" };
 
-        _sendButton.Accepting += (_, _) => _ = SendAsync();
-        _cancelButton.Accepting += (_, _) => _onClose();
+        _sendButton.Accepting += (_, e) => { _ = SendAsync(); e.Handled = true; };
+        _cancelButton.Accepting += (_, e) => { _onClose(); e.Handled = true; };
 
         Add(_sendButton, _cancelButton);
 

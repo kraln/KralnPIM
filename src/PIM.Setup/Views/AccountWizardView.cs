@@ -117,8 +117,9 @@ internal sealed partial class AccountWizardView : View
         var next = new Button { X = Pos.AnchorEnd(22), Y = Pos.AnchorEnd(2), Text = "Next" };
         var cancel = new Button { X = Pos.AnchorEnd(10), Y = Pos.AnchorEnd(2), Text = "Cancel" };
 
-        next.Accepting += (_, _) =>
+        next.Accepting += (_, e) =>
         {
+            e.Handled = true;
             _accountType = (typeList.SelectedItem ?? 0) switch
             {
                 0 => AccountType.Imap,
@@ -131,10 +132,10 @@ internal sealed partial class AccountWizardView : View
             RenderStep();
         };
 
-        cancel.Accepting += (_, _) => _app.ShowView(new AccountListView(_app));
+        cancel.Accepting += (_, e) => { _app.ShowView(new AccountListView(_app)); e.Handled = true; };
 
         Add(title, prompt, typeList, next, cancel);
-        typeList.SetFocus();
+        Application.Invoke(() => typeList.SetFocus());
     }
 
     private void RenderAccountDetails()
@@ -245,7 +246,7 @@ internal sealed partial class AccountWizardView : View
                 break;
         }
 
-        idField.SetFocus();
+        Application.Invoke(() => idField.SetFocus());
     }
 
     private void RenderPasswordStep()
@@ -278,7 +279,7 @@ internal sealed partial class AccountWizardView : View
             return true;
         });
 
-        pwdField.SetFocus();
+        Application.Invoke(() => pwdField.SetFocus());
     }
 
     private void RenderCalDavCalendarsStep()
@@ -311,16 +312,18 @@ internal sealed partial class AccountWizardView : View
         urlField.Visible = false;
         okBtn.Visible = false;
 
-        addBtn.Accepting += (_, _) =>
+        addBtn.Accepting += (_, e) =>
         {
+            e.Handled = true;
             idField.Text = "";
             urlField.Text = "";
             idLabel.Visible = urlLabel.Visible = idField.Visible = urlField.Visible = okBtn.Visible = true;
             idField.SetFocus();
         };
 
-        okBtn.Accepting += (_, _) =>
+        okBtn.Accepting += (_, e) =>
         {
+            e.Handled = true;
             if (string.IsNullOrWhiteSpace(idField.Text) || string.IsNullOrWhiteSpace(urlField.Text))
             {
                 _app.ShowError("Calendar ID and URL are required.");
@@ -332,8 +335,9 @@ internal sealed partial class AccountWizardView : View
             listView.Source = new ListWrapper<string>(listItems);
         };
 
-        removeBtn.Accepting += (_, _) =>
+        removeBtn.Accepting += (_, e) =>
         {
+            e.Handled = true;
             var idx = listView.SelectedItem ?? -1;
             if (idx >= 0 && idx < _calendars.Count)
             {
@@ -350,9 +354,10 @@ internal sealed partial class AccountWizardView : View
         var done = new Button { X = Pos.AnchorEnd(22), Y = Pos.AnchorEnd(2), Text = "Done" };
         var cancel = new Button { X = Pos.AnchorEnd(10), Y = Pos.AnchorEnd(2), Text = "Cancel" };
 
-        back.Accepting += (_, _) => { _step--; RenderStep(); };
-        done.Accepting += (_, _) =>
+        back.Accepting += (_, e) => { _step--; RenderStep(); e.Handled = true; };
+        done.Accepting += (_, e) =>
         {
+            e.Handled = true;
             if (_calendars.Count == 0)
             {
                 _app.ShowError("At least one calendar is required for CalDAV accounts.");
@@ -360,7 +365,7 @@ internal sealed partial class AccountWizardView : View
             }
             SaveAccount();
         };
-        cancel.Accepting += (_, _) => _app.ShowView(new AccountListView(_app));
+        cancel.Accepting += (_, e) => { _app.ShowView(new AccountListView(_app)); e.Handled = true; };
 
         Add(back, done, cancel);
     }
@@ -392,8 +397,9 @@ internal sealed partial class AccountWizardView : View
             });
         }
 
-        runBtn.Accepting += (_, _) =>
+        runBtn.Accepting += (_, e) =>
         {
+            e.Handled = true;
             SaveAccount();
             statusText.Text = "";
 
@@ -450,14 +456,15 @@ internal sealed partial class AccountWizardView : View
             });
         };
 
-        skipBtn.Accepting += (_, _) =>
+        skipBtn.Accepting += (_, e) =>
         {
+            e.Handled = true;
             SaveAccount();
             _app.ShowView(new AccountListView(_app));
         };
 
-        backBtn.Accepting += (_, _) => { _step--; RenderStep(); };
-        cancelBtn.Accepting += (_, _) => _app.ShowView(new AccountListView(_app));
+        backBtn.Accepting += (_, e) => { _step--; RenderStep(); e.Handled = true; };
+        cancelBtn.Accepting += (_, e) => { _app.ShowView(new AccountListView(_app)); e.Handled = true; };
 
         Add(title, statusText, runBtn, skipBtn, backBtn, cancelBtn);
     }
@@ -469,15 +476,16 @@ internal sealed partial class AccountWizardView : View
         if (hasBack)
         {
             var back = new Button { X = Pos.AnchorEnd(34), Y = Pos.AnchorEnd(2), Text = "Back" };
-            back.Accepting += (_, _) => { _step--; RenderStep(); };
+            back.Accepting += (_, e) => { _step--; RenderStep(); e.Handled = true; };
             Add(back);
         }
 
         var next = new Button { X = Pos.AnchorEnd(22), Y = Pos.AnchorEnd(2), Text = "Next" };
         var cancel = new Button { X = Pos.AnchorEnd(10), Y = Pos.AnchorEnd(2), Text = "Cancel" };
 
-        next.Accepting += (_, _) =>
+        next.Accepting += (_, e) =>
         {
+            e.Handled = true;
             if (validate())
             {
                 _step++;
@@ -485,7 +493,7 @@ internal sealed partial class AccountWizardView : View
             }
         };
 
-        cancel.Accepting += (_, _) => _app.ShowView(new AccountListView(_app));
+        cancel.Accepting += (_, e) => { _app.ShowView(new AccountListView(_app)); e.Handled = true; };
 
         Add(next, cancel);
     }

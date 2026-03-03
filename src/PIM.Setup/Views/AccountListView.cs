@@ -51,7 +51,7 @@ internal sealed class AccountListView : View
 
         Add(header, columnHeader, separator, _list, footer);
 
-        _list.Accepting += (_, _) => EditSelected();
+        _list.Accepting += (_, e) => { EditSelected(); e.Handled = true; };
 
         // Key handlers go on _list (the focused control) so they fire before ListView's type-ahead search
         _list.KeyDown += (_, e) =>

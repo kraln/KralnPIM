@@ -95,7 +95,9 @@ internal sealed class SetupApp : Window
         _currentView.Width = Dim.Fill();
         _currentView.Height = Dim.Fill(1);
         Add(_currentView);
-        _currentView.SetFocus();
+        // Defer focus to next event loop iteration — SetFocus fails if called
+        // before Terminal.Gui completes layout for the newly added view
+        Application.Invoke(() => _currentView?.SetFocus());
     }
 
     public void ShowMainMenu()

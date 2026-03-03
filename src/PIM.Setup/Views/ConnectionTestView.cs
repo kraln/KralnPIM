@@ -49,7 +49,7 @@ internal sealed class ConnectionTestView : View
         };
 
         var close = new Button { X = Pos.AnchorEnd(12), Y = Pos.AnchorEnd(2), Text = "Close" };
-        close.Accepting += (_, _) => _app.ShowMainMenu();
+        close.Accepting += (_, e) => { _app.ShowMainMenu(); e.Handled = true; };
 
         Add(header, _output, close);
 

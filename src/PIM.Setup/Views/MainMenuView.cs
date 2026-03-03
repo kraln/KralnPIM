@@ -49,8 +49,9 @@ internal sealed class MainMenuView : View
             Source = new ListWrapper<string>(items),
         };
 
-        list.Accepting += (_, _) =>
+        list.Accepting += (_, e) =>
         {
+            e.Handled = true;
             HandleSelection(list.SelectedItem ?? -1);
         };
 
@@ -76,7 +77,7 @@ internal sealed class MainMenuView : View
             }
         };
 
-        list.SetFocus();
+        Initialized += (_, _) => list.SetFocus();
     }
 
     private void HandleSelection(int index)

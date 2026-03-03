@@ -112,8 +112,8 @@ internal sealed class EventEditorView : View
         _saveButton = new Button { X = 0, Y = Pos.AnchorEnd(1), Text = "Save (Ctrl+S)" };
         _cancelButton = new Button { X = Pos.Right(_saveButton) + 2, Y = Pos.AnchorEnd(1), Text = "Cancel (Esc)" };
 
-        _saveButton.Accepting += (_, _) => _ = SaveAsync();
-        _cancelButton.Accepting += (_, _) => _onClose();
+        _saveButton.Accepting += (_, e) => { _ = SaveAsync(); e.Handled = true; };
+        _cancelButton.Accepting += (_, e) => { _onClose(); e.Handled = true; };
 
         Add(_saveButton, _cancelButton);
 

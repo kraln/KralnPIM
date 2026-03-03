@@ -1,4 +1,5 @@
 using PIM.Core.Config;
+using Terminal.Gui.App;
 using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
 
@@ -66,7 +67,7 @@ internal sealed class SettingsView : View
             return true;
         });
 
-        tzPrimField.SetFocus();
+        Application.Invoke(() => tzPrimField.SetFocus());
     }
 
     private void RenderSystem()
@@ -89,7 +90,7 @@ internal sealed class SettingsView : View
             return true;
         });
 
-        locField.SetFocus();
+        Application.Invoke(() => locField.SetFocus());
     }
 
     private void RenderStorage()
@@ -137,7 +138,7 @@ internal sealed class SettingsView : View
             return true;
         });
 
-        dbField.SetFocus();
+        Application.Invoke(() => dbField.SetFocus());
     }
 
     private void RenderServer()
@@ -188,7 +189,7 @@ internal sealed class SettingsView : View
             return true;
         });
 
-        addrField.SetFocus();
+        Application.Invoke(() => addrField.SetFocus());
     }
 
     private void AddSaveCancel(int y, Func<bool> validate)
@@ -196,8 +197,9 @@ internal sealed class SettingsView : View
         var save = new Button { X = Pos.AnchorEnd(22), Y = Pos.AnchorEnd(2), Text = "Save" };
         var cancel = new Button { X = Pos.AnchorEnd(10), Y = Pos.AnchorEnd(2), Text = "Cancel" };
 
-        save.Accepting += (_, _) =>
+        save.Accepting += (_, e) =>
         {
+            e.Handled = true;
             if (validate())
             {
                 _app.MarkChanged();
@@ -206,7 +208,7 @@ internal sealed class SettingsView : View
             }
         };
 
-        cancel.Accepting += (_, _) => _app.ShowMainMenu();
+        cancel.Accepting += (_, e) => { _app.ShowMainMenu(); e.Handled = true; };
 
         Add(save, cancel);
     }
