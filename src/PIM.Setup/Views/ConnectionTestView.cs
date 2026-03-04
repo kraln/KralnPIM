@@ -31,6 +31,7 @@ internal sealed class ConnectionTestView : View
     {
         _app = app;
         _account = account;
+        CanFocus = true;
 
         var title = account is not null
             ? $"Testing: {account.DisplayName} ({account.Type})"
@@ -375,7 +376,7 @@ internal sealed class ConnectionTestView : View
 
     private void AppendLine(string line)
     {
-        Application.Invoke(() =>
+        App?.Invoke(() =>
         {
             _output.Text = _output.Text + line + "\n";
             _output.MoveEnd();

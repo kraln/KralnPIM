@@ -32,6 +32,7 @@ internal sealed class DashboardTab : View
     {
         _api = api;
         _app = app;
+        CanFocus = true;
 
         _agendaFrame = new FrameView
         {
@@ -94,12 +95,15 @@ internal sealed class DashboardTab : View
         _app.RegisterQuitKey(_accountList);
         _app.RegisterQuitKey(_recentMailList);
 
-        // Refresh system info every 60 seconds
-        Application.AddTimeout(TimeSpan.FromSeconds(60), () =>
+        // Refresh system info every 60 seconds (deferred — App is null during construction)
+        Initialized += (_, _) =>
         {
-            _ = RefreshSystemAsync(CancellationToken.None);
-            return true;
-        });
+            App!.AddTimeout(TimeSpan.FromSeconds(60), () =>
+            {
+                _ = RefreshSystemAsync(CancellationToken.None);
+                return true;
+            });
+        };
     }
 
     internal async Task LoadAsync(CancellationToken ct)
@@ -120,7 +124,7 @@ internal sealed class DashboardTab : View
         if (events is null) return;
 
         _todayEvents = events.OrderBy(e => e.Start).ToList();
-        Application.Invoke(() =>
+        App?.Invoke(() =>
         {
             _agendaFrame.Title = $"Today - {today:ddd MMM d}";
             _agendaList.SetSource(new ObservableCollection<string>(
@@ -140,7 +144,7 @@ internal sealed class DashboardTab : View
         var power = await powerTask;
         var clock = await clockTask;
 
-        Application.Invoke(() =>
+        App?.Invoke(() =>
         {
             if (weather is not null)
                 _weatherLabel.Text = $"Weather: {weather.TemperatureCelsius:F1}°C  {weather.Condition}";
@@ -186,7 +190,7 @@ internal sealed class DashboardTab : View
         if (mail is not null)
             _recentMail = mail;
 
-        Application.Invoke(() =>
+        App?.Invoke(() =>
         {
             _accountList.SetSource(new ObservableCollection<string>(
                 _accounts.Select(a =>
@@ -211,7 +215,7 @@ internal sealed class DashboardTab : View
     internal void UpdateAccountStatus(string accountId, bool online)
     {
         // Refresh account list to show updated online/offline status
-        Application.Invoke(() =>
+        App?.Invoke(() =>
         {
             _accountList.SetSource(new ObservableCollection<string>(
                 _accounts.Select(a =>

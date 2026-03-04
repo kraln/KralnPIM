@@ -9,6 +9,13 @@ using Terminal.Gui.Views;
 
 namespace PIM.Tui;
 
+/// <summary>Disables ListView type-ahead so letter keys reach KeyDown handlers.</summary>
+internal sealed class NoTypeAheadMatcher : ICollectionNavigatorMatcher
+{
+    public bool IsCompatibleKey(Key key) => false;
+    public bool IsMatch(string search, object value) => false;
+}
+
 internal sealed class TuiApp : Window
 {
     private readonly PimApiClient _api;
@@ -63,17 +70,17 @@ internal sealed class TuiApp : Window
         {
             if (e == Key.Q && !IsEditing())
             {
-                Application.RequestStop();
+                App?.RequestStop();
                 e.Handled = true;
             }
         };
 
         // Wire WebSocket events
-        _ws.OnMailSync += evt => Application.Invoke(() => HandleMailSync(evt));
-        _ws.OnCalendarSync += evt => Application.Invoke(() => HandleCalendarSync(evt));
-        _ws.OnStatusChange += evt => Application.Invoke(() => HandleStatusChange(evt));
+        _ws.OnMailSync += evt => App?.Invoke(() => HandleMailSync(evt));
+        _ws.OnCalendarSync += evt => App?.Invoke(() => HandleCalendarSync(evt));
+        _ws.OnStatusChange += evt => App?.Invoke(() => HandleStatusChange(evt));
         _ws.OnConnectionStateChanged += connected =>
-            Application.Invoke(() => ShowStatus(connected ? "Connected to server" : "Disconnected from server"));
+            App?.Invoke(() => ShowStatus(connected ? "Connected to server" : "Disconnected from server"));
 
         // Start WS connection and initial data load after the view is initialized
         Initialized += (_, _) =>
@@ -86,7 +93,7 @@ internal sealed class TuiApp : Window
                 }
                 catch
                 {
-                    Application.Invoke(() => ShowError("Could not connect to WebSocket server"));
+                    App?.Invoke(() => ShowError("Could not connect to WebSocket server"));
                 }
             });
             _ = _dashboardTab.LoadAsync(CancellationToken.None);
@@ -94,15 +101,16 @@ internal sealed class TuiApp : Window
     }
 
     /// <summary>
-    /// Registers the Q-to-quit shortcut on a ListView so it fires before type-ahead search consumes the key.
+    /// Disables type-ahead and registers the Q-to-quit shortcut on a ListView.
     /// </summary>
     internal void RegisterQuitKey(ListView list)
     {
+        list.KeystrokeNavigator.Matcher = new NoTypeAheadMatcher();
         list.KeyDown += (_, e) =>
         {
             if (e == Key.Q && !IsEditing())
             {
-                Application.RequestStop();
+                App?.RequestStop();
                 e.Handled = true;
             }
         };
@@ -126,9 +134,9 @@ internal sealed class TuiApp : Window
     private void ClearStatusAfterDelay()
     {
         if (_statusClearTimeout is not null)
-            Application.RemoveTimeout(_statusClearTimeout);
+            App?.RemoveTimeout(_statusClearTimeout);
 
-        _statusClearTimeout = Application.AddTimeout(TimeSpan.FromSeconds(5), () =>
+        _statusClearTimeout = App?.AddTimeout(TimeSpan.FromSeconds(5), () =>
         {
             _statusLabel.Text = "Ready";
             _statusClearTimeout = null;
@@ -144,7 +152,7 @@ internal sealed class TuiApp : Window
         }
         catch (HttpRequestException ex)
         {
-            Application.Invoke(() => ShowError(ex.Message));
+            App?.Invoke(() => ShowError(ex.Message));
             return default;
         }
         catch (TaskCanceledException)
@@ -161,7 +169,7 @@ internal sealed class TuiApp : Window
         }
         catch (HttpRequestException ex)
         {
-            Application.Invoke(() => ShowError(ex.Message));
+            App?.Invoke(() => ShowError(ex.Message));
         }
         catch (TaskCanceledException)
         {

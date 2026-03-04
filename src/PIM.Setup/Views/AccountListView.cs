@@ -1,10 +1,18 @@
 using System.Collections.ObjectModel;
 using PIM.Core.Config;
+using Terminal.Gui.App;
 using Terminal.Gui.Input;
 using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
 
 namespace PIM.Setup.Views;
+
+/// <summary>Disables ListView type-ahead so letter keys reach KeyDown handlers.</summary>
+internal sealed class NoTypeAheadMatcher : ICollectionNavigatorMatcher
+{
+    public bool IsCompatibleKey(Key key) => false;
+    public bool IsMatch(string search, object value) => false;
+}
 
 internal sealed class AccountListView : View
 {
@@ -16,6 +24,7 @@ internal sealed class AccountListView : View
     public AccountListView(SetupApp app)
     {
         _app = app;
+        CanFocus = true;
 
         var header = new Label
         {
@@ -48,6 +57,9 @@ internal sealed class AccountListView : View
             X = 2, Y = Pos.AnchorEnd(2),
             Text = "[E]dit  [T]est  [D]elete selected account"
         };
+
+        // Disable type-ahead search so letter keys (A/E/T/D) reach our KeyDown handler
+        _list.KeystrokeNavigator.Matcher = new NoTypeAheadMatcher();
 
         Add(header, columnHeader, separator, _list, footer);
 
@@ -86,14 +98,22 @@ internal sealed class AccountListView : View
 
     private async Task RefreshListAsync()
     {
-        _items.Clear();
+        var lines = new List<string>();
         foreach (var account in _app.Config.Accounts)
         {
             var status = await _app.GetAuthStatusAsync(account);
             var typeStr = account.Type.ToString().PadRight(10);
             var nameStr = account.DisplayName.PadRight(25);
-            _items.Add($"  {typeStr} {nameStr} {status}");
+            lines.Add($"  {typeStr} {nameStr} {status}");
         }
+
+        // Marshal UI update to main thread — async continuations run on thread pool
+        App?.Invoke(() =>
+        {
+            _items.Clear();
+            foreach (var line in lines)
+                _items.Add(line);
+        });
     }
 
     private void EditSelected()

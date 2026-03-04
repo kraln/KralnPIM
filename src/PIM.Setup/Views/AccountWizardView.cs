@@ -35,6 +35,7 @@ internal sealed partial class AccountWizardView : View
     {
         _app = app;
         _editing = editing;
+        CanFocus = true;
 
         if (editing is not null)
         {
@@ -55,7 +56,8 @@ internal sealed partial class AccountWizardView : View
             _step = 1; // Skip type selection when editing
         }
 
-        RenderStep();
+        // Defer rendering until App is available (needed for App?.Invoke calls in Render* methods)
+        Initialized += (_, _) => RenderStep();
     }
 
     private int TotalSteps => _accountType switch
@@ -135,7 +137,7 @@ internal sealed partial class AccountWizardView : View
         cancel.Accepting += (_, e) => { _app.ShowView(new AccountListView(_app)); e.Handled = true; };
 
         Add(title, prompt, typeList, next, cancel);
-        Application.Invoke(() => typeList.SetFocus());
+        App?.Invoke(() => typeList.SetFocus());
     }
 
     private void RenderAccountDetails()
@@ -246,7 +248,7 @@ internal sealed partial class AccountWizardView : View
                 break;
         }
 
-        Application.Invoke(() => idField.SetFocus());
+        App?.Invoke(() => idField.SetFocus());
     }
 
     private void RenderPasswordStep()
@@ -279,7 +281,7 @@ internal sealed partial class AccountWizardView : View
             return true;
         });
 
-        Application.Invoke(() => pwdField.SetFocus());
+        App?.Invoke(() => pwdField.SetFocus());
     }
 
     private void RenderCalDavCalendarsStep()
@@ -329,6 +331,11 @@ internal sealed partial class AccountWizardView : View
                 _app.ShowError("Calendar ID and URL are required.");
                 return;
             }
+            if (_calendars.Any(c => c.Id == idField.Text))
+            {
+                _app.ShowError($"Calendar ID '{idField.Text}' already exists.");
+                return;
+            }
             _calendars.Add(new CalendarSourceConfig(idField.Text, CalendarType.CalDav, urlField.Text));
             idLabel.Visible = urlLabel.Visible = idField.Visible = urlField.Visible = okBtn.Visible = false;
             listItems.Add($"  {idField.Text,-20} {urlField.Text}");
@@ -364,6 +371,7 @@ internal sealed partial class AccountWizardView : View
                 return;
             }
             SaveAccount();
+            _app.ShowView(new AccountListView(_app));
         };
         cancel.Accepting += (_, e) => { _app.ShowView(new AccountListView(_app)); e.Handled = true; };
 
@@ -390,7 +398,7 @@ internal sealed partial class AccountWizardView : View
 
         void AppendStatus(string msg)
         {
-            Application.Invoke(() =>
+            App?.Invoke(() =>
             {
                 statusText.Text += msg + "\n";
                 statusText.MoveEnd();

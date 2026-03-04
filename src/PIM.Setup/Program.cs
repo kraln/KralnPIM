@@ -15,14 +15,8 @@ for (var i = 0; i < args.Length - 1; i++)
 using var loggerFactory = LoggerFactory.Create(b =>
     b.AddConsole().SetMinimumLevel(LogLevel.Warning));
 
-Application.Init();
+using IApplication guiApp = Application.Create();
+guiApp.Init();
 
-try
-{
-    var app = new SetupApp(configPath, loggerFactory);
-    Application.Run(app);
-}
-finally
-{
-    Application.Shutdown();
-}
+using var app = new SetupApp(configPath, loggerFactory);
+guiApp.Run(app);

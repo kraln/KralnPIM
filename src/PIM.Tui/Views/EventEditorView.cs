@@ -37,6 +37,7 @@ internal sealed class EventEditorView : View
         _app = app;
         _existing = existing;
         _onClose = onClose;
+        CanFocus = true;
 
         X = 0; Y = 0;
         Width = Dim.Fill();
@@ -139,7 +140,7 @@ internal sealed class EventEditorView : View
     {
         _accounts = await _app.SafeApiCallAsync(c => _api.GetAccountsAsync(c)) ?? [];
 
-        Application.Invoke(() =>
+        App?.Invoke(() =>
         {
             _accountCombo.SetSource(new ObservableCollection<string>(
                 _accounts.Select(a => a.DisplayName)));

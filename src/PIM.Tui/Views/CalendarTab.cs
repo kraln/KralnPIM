@@ -28,6 +28,7 @@ internal sealed class CalendarTab : View
     {
         _api = api;
         _app = app;
+        CanFocus = true;
         _windowStart = DateTimeOffset.Now.Date;
 
         // Left pane: today's agenda
@@ -142,7 +143,7 @@ internal sealed class CalendarTab : View
         if (events is null) return;
 
         _todayEvents = events.OrderBy(e => e.Start).ToList();
-        Application.Invoke(() =>
+        App?.Invoke(() =>
         {
             _agendaFrame.Title = $"Today - {today:ddd MMM d}";
             _agendaList.SetSource(new ObservableCollection<string>(
@@ -160,7 +161,7 @@ internal sealed class CalendarTab : View
 
         _windowEvents = events;
 
-        Application.Invoke(() =>
+        App?.Invoke(() =>
         {
             _timelineFrame.Title = $"Timeline: {_windowStart:MMM d} - {end.AddDays(-1):MMM d}";
 

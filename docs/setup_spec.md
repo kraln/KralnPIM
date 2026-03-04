@@ -53,7 +53,7 @@ tests/PIM.Setup.Tests/
     <InternalsVisibleTo Include="PIM.Setup.Tests" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Terminal.Gui" Version="2.0.0-develop.5027" />
+    <PackageReference Include="Terminal.Gui" Version="2.0.0-develop.5043" />
     <PackageReference Include="YamlDotNet" Version="16.3.0" />
     <PackageReference Include="MailKit" Version="4.12.0" />
     <PackageReference Include="Google.Apis.Auth" Version="1.69.0" />
@@ -85,9 +85,10 @@ Add to `PIM.slnx`:
 ```csharp
 // Parse --config-path arg (default: ~/.pim/config.yaml)
 // Create ILoggerFactory
-// Application.Init()
-// try { Application.Run(new SetupApp(configPath, loggerFactory)); }
-// finally { Application.Shutdown(); }
+// using IApplication guiApp = Application.Create();
+// guiApp.Init();
+// using var app = new SetupApp(configPath, loggerFactory);
+// guiApp.Run(app);
 ```
 
 On startup, `SetupApp` calls `ConfigSerializer.LoadOrDefault(configPath)`:

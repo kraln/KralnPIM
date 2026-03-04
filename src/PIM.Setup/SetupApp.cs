@@ -97,7 +97,7 @@ internal sealed class SetupApp : Window
         Add(_currentView);
         // Defer focus to next event loop iteration — SetFocus fails if called
         // before Terminal.Gui completes layout for the newly added view
-        Application.Invoke(() => _currentView?.SetFocus());
+        App?.Invoke(() => _currentView?.SetFocus());
     }
 
     public void ShowMainMenu()
@@ -147,14 +147,14 @@ internal sealed class SetupApp : Window
     {
         if (!_hasUnsavedChanges)
         {
-            Application.RequestStop();
+            App?.RequestStop();
             return true;
         }
 
         // Two-press confirmation
         if (_exitConfirmPending)
         {
-            Application.RequestStop();
+            App?.RequestStop();
             return true;
         }
 
@@ -219,9 +219,9 @@ internal sealed class SetupApp : Window
     private void ClearStatusAfterDelay()
     {
         if (_statusClearTimeout is not null)
-            Application.RemoveTimeout(_statusClearTimeout);
+            App?.RemoveTimeout(_statusClearTimeout);
 
-        _statusClearTimeout = Application.AddTimeout(TimeSpan.FromSeconds(5), () =>
+        _statusClearTimeout = App?.AddTimeout(TimeSpan.FromSeconds(5), () =>
         {
             _statusLabel.Text = "Ready";
             _statusClearTimeout = null;

@@ -14,22 +14,27 @@ internal sealed class SettingsView : View
     public SettingsView(SetupApp app, SettingsSection section)
     {
         _app = app;
+        CanFocus = true;
 
-        switch (section)
+        // Defer rendering until App is available (needed for App?.Invoke calls in Render* methods)
+        Initialized += (_, _) =>
         {
-            case SettingsSection.Ui:
-                RenderUi();
-                break;
-            case SettingsSection.System:
-                RenderSystem();
-                break;
-            case SettingsSection.Storage:
-                RenderStorage();
-                break;
-            case SettingsSection.Server:
-                RenderServer();
-                break;
-        }
+            switch (section)
+            {
+                case SettingsSection.Ui:
+                    RenderUi();
+                    break;
+                case SettingsSection.System:
+                    RenderSystem();
+                    break;
+                case SettingsSection.Storage:
+                    RenderStorage();
+                    break;
+                case SettingsSection.Server:
+                    RenderServer();
+                    break;
+            }
+        };
     }
 
     private void RenderUi()
@@ -67,7 +72,7 @@ internal sealed class SettingsView : View
             return true;
         });
 
-        Application.Invoke(() => tzPrimField.SetFocus());
+        App?.Invoke(() => tzPrimField.SetFocus());
     }
 
     private void RenderSystem()
@@ -90,7 +95,7 @@ internal sealed class SettingsView : View
             return true;
         });
 
-        Application.Invoke(() => locField.SetFocus());
+        App?.Invoke(() => locField.SetFocus());
     }
 
     private void RenderStorage()
@@ -138,7 +143,7 @@ internal sealed class SettingsView : View
             return true;
         });
 
-        Application.Invoke(() => dbField.SetFocus());
+        App?.Invoke(() => dbField.SetFocus());
     }
 
     private void RenderServer()
@@ -189,7 +194,7 @@ internal sealed class SettingsView : View
             return true;
         });
 
-        Application.Invoke(() => addrField.SetFocus());
+        App?.Invoke(() => addrField.SetFocus());
     }
 
     private void AddSaveCancel(int y, Func<bool> validate)

@@ -32,6 +32,7 @@ internal sealed class ComposeView : View
         _api = api;
         _app = app;
         _onClose = onClose;
+        CanFocus = true;
 
         X = 0; Y = 0;
         Width = Dim.Fill();
@@ -123,7 +124,7 @@ internal sealed class ComposeView : View
         _accounts = await _app.SafeApiCallAsync(
             c => _api.GetAccountsAsync(c)) ?? [];
 
-        Application.Invoke(() =>
+        App?.Invoke(() =>
         {
             _fromAccount.SetSource(new ObservableCollection<string>(
                 _accounts.Select(a => $"{a.DisplayName} ({a.Type})")));

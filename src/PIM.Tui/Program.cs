@@ -25,15 +25,9 @@ using var loggerFactory = LoggerFactory.Create(b =>
 using var apiClient = new PimApiClient(restUrl);
 var wsClient = new PimWsClient(new Uri(wsUrl), loggerFactory.CreateLogger<PimWsClient>());
 
-Application.Init();
+using IApplication guiApp = Application.Create();
+guiApp.Init();
 
-try
-{
-    var tuiApp = new TuiApp(apiClient, wsClient);
-    Application.Run(tuiApp);
-}
-finally
-{
-    Application.Shutdown();
-    await wsClient.DisposeAsync();
-}
+using var tuiApp = new TuiApp(apiClient, wsClient);
+guiApp.Run(tuiApp);
+await wsClient.DisposeAsync();

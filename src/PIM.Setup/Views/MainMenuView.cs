@@ -13,6 +13,7 @@ internal sealed class MainMenuView : View
     public MainMenuView(SetupApp app)
     {
         _app = app;
+        CanFocus = true;
 
         var configExists = File.Exists(app.ConfigPath);
         var dbPath = app.Config.Storage.DbPath.Replace("~",
@@ -48,6 +49,9 @@ internal sealed class MainMenuView : View
             Height = items.Count,
             Source = new ListWrapper<string>(items),
         };
+
+        // Disable type-ahead search so number keys reach our KeyDown handler
+        list.KeystrokeNavigator.Matcher = new NoTypeAheadMatcher();
 
         list.Accepting += (_, e) =>
         {
@@ -107,7 +111,7 @@ internal sealed class MainMenuView : View
                 break;
             case 7:
                 if (_app.SaveConfig())
-                    Application.RequestStop();
+                    _app.App?.RequestStop();
                 break;
             case 8:
                 _app.ConfirmExit();
