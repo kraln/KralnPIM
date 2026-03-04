@@ -70,7 +70,7 @@ internal sealed class SettingsView : View
 
             _app.Config = _app.Config with { Ui = new UiConfig(primary, secondary) };
             return true;
-        });
+        }, [tzPrimField, tzSecField]);
 
         App?.Invoke(() => tzPrimField.SetFocus());
     }
@@ -93,7 +93,7 @@ internal sealed class SettingsView : View
             var location = string.IsNullOrWhiteSpace(locField.Text) ? null : locField.Text;
             _app.Config = _app.Config with { System = new SystemConfig(location, _app.Config.System.WeatherProvider) };
             return true;
-        });
+        }, [locField]);
 
         App?.Invoke(() => locField.SetFocus());
     }
@@ -141,7 +141,7 @@ internal sealed class SettingsView : View
                 Storage = new StorageConfig(dbField.Text, attField.Text, monthsBack, monthsFwd)
             };
             return true;
-        });
+        }, [dbField, attField, backField, fwdField]);
 
         App?.Invoke(() => dbField.SetFocus());
     }
@@ -192,29 +192,53 @@ internal sealed class SettingsView : View
                 Server = new ServerConfig(addrField.Text, restPort, wsPort)
             };
             return true;
-        });
+        }, [addrField, restField, wsField]);
 
         App?.Invoke(() => addrField.SetFocus());
     }
 
-    private void AddSaveCancel(int y, Func<bool> validate)
+    private void AddSaveCancel(int y, Func<bool> validate, View[]? formFields = null)
     {
         var save = new Button { X = Pos.AnchorEnd(22), Y = Pos.AnchorEnd(2), Text = "Save" };
         var cancel = new Button { X = Pos.AnchorEnd(10), Y = Pos.AnchorEnd(2), Text = "Cancel" };
 
-        save.Accepting += (_, e) =>
+        void SaveAndReturn()
         {
-            e.Handled = true;
             if (validate())
             {
                 _app.MarkChanged();
                 _app.ShowStatus("Settings updated.");
                 _app.ShowMainMenu();
             }
+        }
+
+        save.Accepting += (_, e) =>
+        {
+            e.Handled = true;
+            SaveAndReturn();
         };
 
         cancel.Accepting += (_, e) => { _app.ShowMainMenu(); e.Handled = true; };
 
+        if (formFields is not null)
+            WireEnterAdvance(formFields, SaveAndReturn);
+
         Add(save, cancel);
+    }
+
+    private static void WireEnterAdvance(View[] fields, Action lastFieldAction)
+    {
+        for (var i = 0; i < fields.Length; i++)
+        {
+            var nextField = i < fields.Length - 1 ? fields[i + 1] : null;
+            fields[i].Accepting += (_, e) =>
+            {
+                e.Handled = true;
+                if (nextField is not null)
+                    nextField.SetFocus();
+                else
+                    lastFieldAction();
+            };
+        }
     }
 }

@@ -194,7 +194,7 @@ internal sealed partial class AccountWizardView : View
                     _ = int.TryParse(smtpPortField.Text, out _smtpPort);
                     _username = userField.Text;
                     return ValidateDetails();
-                });
+                }, [idField, nameField, imapHostField, imapPortField, smtpHostField, smtpPortField, userField]);
                 break;
 
             case AccountType.Google:
@@ -212,7 +212,7 @@ internal sealed partial class AccountWizardView : View
                     _clientId = gClientField.Text;
                     _clientSecret = gSecretField.Text;
                     return ValidateDetails();
-                });
+                }, [idField, nameField, gClientField, gSecretField]);
                 break;
 
             case AccountType.Office365:
@@ -230,7 +230,7 @@ internal sealed partial class AccountWizardView : View
                     _tenantId = tenantField.Text;
                     _clientId = o365ClientField.Text;
                     return ValidateDetails();
-                });
+                }, [idField, nameField, tenantField, o365ClientField]);
                 break;
 
             case AccountType.CalDav:
@@ -244,7 +244,7 @@ internal sealed partial class AccountWizardView : View
                     _displayName = nameField.Text;
                     _username = caldavUserField.Text;
                     return ValidateDetails();
-                });
+                }, [idField, nameField, caldavUserField]);
                 break;
         }
 
@@ -279,7 +279,7 @@ internal sealed partial class AccountWizardView : View
             }
             _password = pwdField.Text;
             return true;
-        });
+        }, [pwdField, confirmField]);
 
         App?.Invoke(() => pwdField.SetFocus());
     }
@@ -323,9 +323,8 @@ internal sealed partial class AccountWizardView : View
             idField.SetFocus();
         };
 
-        okBtn.Accepting += (_, e) =>
+        void AddCalendar()
         {
-            e.Handled = true;
             if (string.IsNullOrWhiteSpace(idField.Text) || string.IsNullOrWhiteSpace(urlField.Text))
             {
                 _app.ShowError("Calendar ID and URL are required.");
@@ -340,7 +339,15 @@ internal sealed partial class AccountWizardView : View
             idLabel.Visible = urlLabel.Visible = idField.Visible = urlField.Visible = okBtn.Visible = false;
             listItems.Add($"  {idField.Text,-20} {urlField.Text}");
             listView.Source = new ListWrapper<string>(listItems);
+        }
+
+        okBtn.Accepting += (_, e) =>
+        {
+            e.Handled = true;
+            AddCalendar();
         };
+
+        WireEnterAdvance([idField, urlField], AddCalendar);
 
         removeBtn.Accepting += (_, e) =>
         {
@@ -371,6 +378,7 @@ internal sealed partial class AccountWizardView : View
                 return;
             }
             SaveAccount();
+            SavePasswordToDb();
             _app.ShowView(new AccountListView(_app));
         };
         cancel.Accepting += (_, e) => { _app.ShowView(new AccountListView(_app)); e.Handled = true; };
@@ -468,6 +476,7 @@ internal sealed partial class AccountWizardView : View
         {
             e.Handled = true;
             SaveAccount();
+            SavePasswordToDb();
             _app.ShowView(new AccountListView(_app));
         };
 
@@ -477,7 +486,7 @@ internal sealed partial class AccountWizardView : View
         Add(title, statusText, runBtn, skipBtn, backBtn, cancelBtn);
     }
 
-    private void AddNavigationButtons(int y, Func<bool> validate)
+    private void AddNavigationButtons(int y, Func<bool> validate, View[]? formFields = null)
     {
         var hasBack = _step > 0 && _editing is null || _step > 1;
 
@@ -491,17 +500,25 @@ internal sealed partial class AccountWizardView : View
         var next = new Button { X = Pos.AnchorEnd(22), Y = Pos.AnchorEnd(2), Text = "Next" };
         var cancel = new Button { X = Pos.AnchorEnd(10), Y = Pos.AnchorEnd(2), Text = "Cancel" };
 
-        next.Accepting += (_, e) =>
+        void Advance()
         {
-            e.Handled = true;
             if (validate())
             {
                 _step++;
                 RenderStep();
             }
+        }
+
+        next.Accepting += (_, e) =>
+        {
+            e.Handled = true;
+            Advance();
         };
 
         cancel.Accepting += (_, e) => { _app.ShowView(new AccountListView(_app)); e.Handled = true; };
+
+        if (formFields is not null)
+            WireEnterAdvance(formFields, Advance);
 
         Add(next, cancel);
     }
@@ -598,6 +615,49 @@ internal sealed partial class AccountWizardView : View
 
         _app.Config = _app.Config with { Accounts = accounts };
         _app.MarkChanged();
+    }
+
+    private void SavePasswordToDb()
+    {
+        if (string.IsNullOrEmpty(_password) || _accountType is not (AccountType.Imap or AccountType.CalDav))
+            return;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                _app.InitializeDb();
+                if (_app.AuthRepo is null) return;
+
+                if (_accountType == AccountType.Imap)
+                    await _app.AuthRepo.SaveImapPasswordAsync(_id, _password);
+                else
+                    await _app.AuthRepo.SaveCalDavPasswordAsync(_id, _password);
+            }
+            catch (Exception ex)
+            {
+                App?.Invoke(() => _app.ShowError($"Failed to save password: {ex.Message}"));
+            }
+        });
+    }
+
+    /// <summary>
+    /// Wires Enter on each field to advance focus to the next, with the last field triggering an action.
+    /// </summary>
+    private static void WireEnterAdvance(View[] fields, Action lastFieldAction)
+    {
+        for (var i = 0; i < fields.Length; i++)
+        {
+            var nextField = i < fields.Length - 1 ? fields[i + 1] : null;
+            fields[i].Accepting += (_, e) =>
+            {
+                e.Handled = true;
+                if (nextField is not null)
+                    nextField.SetFocus();
+                else
+                    lastFieldAction();
+            };
+        }
     }
 
     [GeneratedRegex(@"^[a-z0-9-]+$")]
