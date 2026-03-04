@@ -150,13 +150,13 @@ internal sealed class TuiApp : Window
         {
             return await call(ct);
         }
-        catch (HttpRequestException ex)
-        {
-            App?.Invoke(() => ShowError(ex.Message));
-            return default;
-        }
         catch (TaskCanceledException)
         {
+            return default;
+        }
+        catch (Exception ex)
+        {
+            App?.Invoke(() => ShowError(ex.Message));
             return default;
         }
     }
@@ -167,13 +167,13 @@ internal sealed class TuiApp : Window
         {
             await call(ct);
         }
-        catch (HttpRequestException ex)
-        {
-            App?.Invoke(() => ShowError(ex.Message));
-        }
         catch (TaskCanceledException)
         {
             // Cancelled
+        }
+        catch (Exception ex)
+        {
+            App?.Invoke(() => ShowError(ex.Message));
         }
     }
 

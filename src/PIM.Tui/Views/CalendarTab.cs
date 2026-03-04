@@ -29,6 +29,7 @@ internal sealed class CalendarTab : View
         _api = api;
         _app = app;
         CanFocus = true;
+        X = 0; Y = 0; Width = Dim.Fill(); Height = Dim.Fill();
         _windowStart = DateTimeOffset.Now.Date;
 
         // Left pane: today's agenda
@@ -136,18 +137,23 @@ internal sealed class CalendarTab : View
     private async Task RefreshAgendaAsync(CancellationToken ct)
     {
         var today = DateTimeOffset.Now.Date;
-        var tomorrow = today.AddDays(1);
+        var end = today.AddDays(14);
         var events = await _app.SafeApiCallAsync(
-            c => _api.GetEventsAsync(new DateTimeOffset(today), new DateTimeOffset(tomorrow), ct: c), ct);
+            c => _api.GetEventsAsync(new DateTimeOffset(today), new DateTimeOffset(end), ct: c), ct);
 
         if (events is null) return;
 
         _todayEvents = events.OrderBy(e => e.Start).ToList();
-        App?.Invoke(() =>
+        _app.App?.Invoke(() =>
         {
-            _agendaFrame.Title = $"Today - {today:ddd MMM d}";
+            _agendaFrame.Title = "Upcoming";
             _agendaList.SetSource(new ObservableCollection<string>(
-                _todayEvents.Select(e => $"{e.Start.ToLocalTime():HH:mm}  {e.Summary}")));
+                _todayEvents.Select(e =>
+                {
+                    var date = e.Start.ToLocalTime();
+                    var prefix = date.Date == today ? $"{date:HH:mm}    " : $"{date:MMM d} {date:HH:mm}";
+                    return $"{prefix}  {e.Summary}";
+                })));
         });
     }
 
@@ -161,7 +167,7 @@ internal sealed class CalendarTab : View
 
         _windowEvents = events;
 
-        App?.Invoke(() =>
+        _app.App?.Invoke(() =>
         {
             _timelineFrame.Title = $"Timeline: {_windowStart:MMM d} - {end.AddDays(-1):MMM d}";
 

@@ -63,6 +63,17 @@ Interactive TUI for configuring accounts, settings, and running connection tests
 
 Copy `config.example.yaml` to `~/.pim/config.yaml` and fill in your account details, or use `PIM.Setup` for guided configuration. See the file for supported account types (IMAP, Google, Office 365, CalDAV) and options.
 
+## Features
+
+- **Multi-provider aggregation**: IMAP/SMTP, Gmail (OAuth2), Office 365 (MSAL), CalDAV
+- **Unified search**: Local FTS5 + parallel remote deep search with dedup
+- **Real-time sync**: WebSocket push for mail, calendar, and account status changes
+- **Dashboard**: Upcoming agenda, weather, power, world clocks, mail overview
+- **Calendar**: 4-day timeline with event creation/editing, left/right day navigation
+- **Email**: Inbox with read/unread/flagged filters, search, compose/reply, attachments
+- **Setup wizard**: Guided account configuration with connection testing, SSL error bypass
+- **System info**: Battery/power (Linux `/sys/`), weather (Open-Meteo), multi-timezone clocks
+
 ## Status
 
 | Phase | Module | Status |
@@ -77,3 +88,4 @@ Copy `config.example.yaml` to `~/.pim/config.yaml` and fill in your account deta
 | 3 | PIM.Server | Done |
 | 4 | PIM.Tui | Done |
 | 5 | PIM.Setup | Done |
+| 6 | Integration testing | In progress |

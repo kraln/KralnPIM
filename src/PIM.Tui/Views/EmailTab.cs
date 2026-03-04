@@ -40,6 +40,7 @@ internal sealed class EmailTab : View
         _api = api;
         _app = app;
         CanFocus = true;
+        X = 0; Y = 0; Width = Dim.Fill(); Height = Dim.Fill();
 
         // Left pane: inbox
         _inboxFrame = new FrameView
@@ -199,7 +200,7 @@ internal sealed class EmailTab : View
         if (emails is null) return;
 
         _emails = emails;
-        App?.Invoke(() =>
+        _app.App?.Invoke(() =>
         {
             var filterHints = new List<string>();
             if (_filterUnread == false) filterHints.Add("unread");
@@ -232,7 +233,7 @@ internal sealed class EmailTab : View
 
         _currentDetail = detail;
 
-        App?.Invoke(() =>
+        _app.App?.Invoke(() =>
         {
             _readerFromLabel.Text = $"From: {detail.Header.FromDisplayName} <{detail.Header.FromAddress}>";
             _readerToLabel.Text = $"To: {string.Join(", ", detail.Header.ToAddresses)}";
@@ -269,7 +270,7 @@ internal sealed class EmailTab : View
         if (result is null) return;
 
         _emails = result.Emails;
-        App?.Invoke(() =>
+        _app.App?.Invoke(() =>
         {
             _inboxFrame.Title = $"Search: {query}";
             _inboxList.SetSource(new ObservableCollection<string>(_emails

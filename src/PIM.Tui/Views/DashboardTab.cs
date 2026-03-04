@@ -18,6 +18,7 @@ internal sealed class DashboardTab : View
     private readonly FrameView _mailFrame;
 
     private readonly ListView _agendaList;
+    private readonly Label _dateLabel;
     private readonly Label _weatherLabel;
     private readonly Label _powerLabel;
     private readonly Label _clockLabel;
@@ -33,6 +34,7 @@ internal sealed class DashboardTab : View
         _api = api;
         _app = app;
         CanFocus = true;
+        X = 0; Y = 0; Width = Dim.Fill(); Height = Dim.Fill();
 
         _agendaFrame = new FrameView
         {
@@ -59,10 +61,13 @@ internal sealed class DashboardTab : View
             Height = Dim.Fill()
         };
 
-        _weatherLabel = new Label { X = 0, Y = 0, Width = Dim.Fill(), Text = "Weather: loading..." };
-        _powerLabel = new Label { X = 0, Y = 1, Width = Dim.Fill(), Text = "Power: loading..." };
-        _clockLabel = new Label { X = 0, Y = 3, Width = Dim.Fill(), Height = 4, Text = "Clock: loading..." };
-        _systemFrame.Add(_weatherLabel, _powerLabel, _clockLabel);
+        var today = DateTimeOffset.Now;
+        var week = System.Globalization.ISOWeek.GetWeekOfYear(today.DateTime);
+        _dateLabel = new Label { X = 0, Y = 0, Width = Dim.Fill(), Text = $"{today:dddd, d MMMM yyyy}  (W{week})" };
+        _weatherLabel = new Label { X = 0, Y = 2, Width = Dim.Fill(), Text = "Weather: loading..." };
+        _powerLabel = new Label { X = 0, Y = 3, Width = Dim.Fill(), Text = "Power: loading..." };
+        _clockLabel = new Label { X = 0, Y = 5, Width = Dim.Fill(), Height = 4, Text = "Clock: loading..." };
+        _systemFrame.Add(_dateLabel, _weatherLabel, _powerLabel, _clockLabel);
 
         _mailFrame = new FrameView
         {
@@ -98,7 +103,7 @@ internal sealed class DashboardTab : View
         // Refresh system info every 60 seconds (deferred — App is null during construction)
         Initialized += (_, _) =>
         {
-            App!.AddTimeout(TimeSpan.FromSeconds(60), () =>
+            _app.App!.AddTimeout(TimeSpan.FromSeconds(60), () =>
             {
                 _ = RefreshSystemAsync(CancellationToken.None);
                 return true;
@@ -117,18 +122,39 @@ internal sealed class DashboardTab : View
     internal async Task RefreshAgendaAsync(CancellationToken ct)
     {
         var today = DateTimeOffset.Now.Date;
-        var tomorrow = today.AddDays(1);
+        var end = today.AddDays(14);
         var events = await _app.SafeApiCallAsync(
-            c => _api.GetEventsAsync(new DateTimeOffset(today), new DateTimeOffset(tomorrow), ct: c), ct);
+            c => _api.GetEventsAsync(new DateTimeOffset(today), new DateTimeOffset(end), ct: c), ct);
 
         if (events is null) return;
 
         _todayEvents = events.OrderBy(e => e.Start).ToList();
-        App?.Invoke(() =>
+        _app.App?.Invoke(() =>
         {
-            _agendaFrame.Title = $"Today - {today:ddd MMM d}";
-            _agendaList.SetSource(new ObservableCollection<string>(
-                _todayEvents.Select(e => $"{e.Start.ToLocalTime():HH:mm}  {e.Summary}")));
+            _agendaFrame.Title = "Agenda";
+            var lines = new List<string>();
+            var currentDate = (DateTime?)null;
+
+            foreach (var e in _todayEvents)
+            {
+                var eventDate = e.Start.ToLocalTime().Date;
+                if (currentDate != eventDate)
+                {
+                    if (lines.Count > 0) lines.Add("");
+                    var dayLabel = eventDate == today
+                        ? $"Today - {eventDate:ddd MMM d}"
+                        : $"{eventDate:ddd MMM d}";
+                    lines.Add(dayLabel);
+                    currentDate = eventDate;
+                }
+
+                lines.Add($"  {e.Start.ToLocalTime():HH:mm}  {e.Summary}");
+            }
+
+            if (lines.Count == 0)
+                lines.Add($"Today - {today:ddd MMM d}");
+
+            _agendaList.SetSource(new ObservableCollection<string>(lines));
         });
     }
 
@@ -144,8 +170,12 @@ internal sealed class DashboardTab : View
         var power = await powerTask;
         var clock = await clockTask;
 
-        App?.Invoke(() =>
+        _app.App?.Invoke(() =>
         {
+            var now = DateTimeOffset.Now;
+            var wk = System.Globalization.ISOWeek.GetWeekOfYear(now.DateTime);
+            _dateLabel.Text = $"{now:dddd, d MMMM yyyy}  (W{wk})";
+
             if (weather is not null)
                 _weatherLabel.Text = $"Weather: {weather.TemperatureCelsius:F1}°C  {weather.Condition}";
             else
@@ -186,11 +216,11 @@ internal sealed class DashboardTab : View
         var mail = await mailTask;
 
         if (accounts is not null)
-            _accounts = accounts;
+            _accounts = accounts.Where(a => a.Type is not "CalDav").ToList();
         if (mail is not null)
             _recentMail = mail;
 
-        App?.Invoke(() =>
+        _app.App?.Invoke(() =>
         {
             _accountList.SetSource(new ObservableCollection<string>(
                 _accounts.Select(a =>
@@ -215,7 +245,7 @@ internal sealed class DashboardTab : View
     internal void UpdateAccountStatus(string accountId, bool online)
     {
         // Refresh account list to show updated online/offline status
-        App?.Invoke(() =>
+        _app.App?.Invoke(() =>
         {
             _accountList.SetSource(new ObservableCollection<string>(
                 _accounts.Select(a =>

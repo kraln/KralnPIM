@@ -844,27 +844,27 @@ public class PimApiClient
 
 ```
 ┌─ Agenda ──────────┬─ System ─────────────┬─ Mail Overview ────────────┐
-│ TODAY - Mon Jan 6  │ ☀ 72°F Clear         │ Accounts:                  │
-│                    │ 💻 87% · 3h 12m · 8W │ ● Personal   3 unread  1 ★│
-│ 09:00  Standup     │                      │ ● Work (G)  12 unread  0 ★│
-│ 10:30  Design Rev  │ New York   10:42 AM  │ ● Work (O)   0 unread  2 ★│
-│ 12:00  Lunch       │ London      3:42 PM  │──────────────────────────  │
-│ 14:00  Sprint Plan │                      │ ✉ [Work G] Design specs.. │
-│ 16:30  1:1 w/ Mgr  │                      │ ✉ [Person] Re: Weekend..  │
-│                    │                      │ ✉ [Work O] Q4 Budget ap.. │
-│                    │                      │ ★ [Person] Flight conf..  │
+│ Today - Mon Jan 6  │ Monday, 6 January    │ Accounts:                  │
+│   09:00  Standup   │    2025  (W2)        │ ● Personal   3 unread  1 ★│
+│   10:30  Design Rev│                      │ ● Work (G)  12 unread  0 ★│
+│   12:00  Lunch     │ Weather: 22.2°C Clear│ ● Work (O)   0 unread  2 ★│
+│   14:00  Sprint    │ Power: 87% (3h 12m)  │──────────────────────────  │
+│   16:30  1:1 w/ Mgr│                      │ ✉ [Work G] Design specs.. │
+│                    │ Clocks:              │ ✉ [Person] Re: Weekend..  │
+│ Wed Jan 8          │   New York: 10:42    │ ✉ [Work O] Q4 Budget ap.. │
+│   09:00  Review    │   London: 15:42      │ ★ [Person] Flight conf..  │
 └────────────────────┴──────────────────────┴────────────────────────────┘
 ```
 
-- Agenda: Fetch `GET /api/calendar/events?start={today_00:00}&end={tomorrow_00:00}`.
-- System: Poll `GET /api/system/power`, `/weather`, `/clock` every 60 seconds.
-- Mail Overview: Fetch `GET /api/mail/accounts` and `GET /api/mail?limit=10`.
+- Agenda: Fetch `GET /api/calendar/events?start={today}&end={today+14d}`, grouped by day with headers.
+- System: Date/week at top; poll `GET /api/system/power`, `/weather`, `/clock` every 60 seconds.
+- Mail Overview: Fetch `GET /api/mail/accounts` (excluding CalDAV) and `GET /api/mail?limit=10`.
 
 **Tab 2: Calendar**
 
 ```
-┌─ Agenda ──────────┬─ Timeline: Jan 6 - Jan 9 ─────────────────────────┐
-│ (same as Tab 1)   │  Mon 6     Tue 7     Wed 8     Thu 9              │
+┌─ Upcoming ────────┬─ Timeline: Jan 6 - Jan 9 ─────────────────────────┐
+│ 14-day agenda     │  Mon 6     Tue 7     Wed 8     Thu 9              │
 │                   │ ┌───────┐                                         │
 │                   │ │09 Stup│ ┌───────┐                               │
 │                   │ └───────┘ │10 Dsgn│            ┌───────┐          │

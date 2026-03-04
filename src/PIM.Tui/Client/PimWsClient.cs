@@ -24,7 +24,7 @@ public sealed class PimWsClient : IAsyncDisposable
     {
         _wsUri = wsUri;
         _logger = logger;
-        _jsonOptions = new JsonSerializerOptions();
+        _jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
         _jsonOptions.TypeInfoResolverChain.Add(TuiJsonContext.Default);
     }
 

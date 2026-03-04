@@ -402,7 +402,7 @@ Adapted from `GoogleOAuthHelper.AuthorizeAsync` in `src/PIM.Sync.Google/GoogleOA
 12. Persist token: `IAuthRepository.SaveOAuthTokenAsync(new OAuthToken(...))`
 13. Return HTML response to browser: "Authorization successful! You can close this window."
 
-**TUI coordination:** The `HttpListener` runs on `Task.Run` to avoid blocking the Terminal.Gui event loop. Status updates via `Application.Invoke()`. A "Cancel" button cancels the `CancellationTokenSource`, which stops the listener.
+**TUI coordination:** The `HttpListener` runs on `Task.Run` to avoid blocking the Terminal.Gui event loop. Status updates via `App?.Invoke()` (instance API, not static `Application.Invoke()`). A "Cancel" button cancels the `CancellationTokenSource`, which stops the listener.
 
 ### 5.2 Office 365 Device Code (GraphAuthFlow)
 
@@ -444,6 +444,8 @@ All tests use a 15-second timeout via `CancellationTokenSource.CreateLinkedToken
 
 ```csharp
 using var client = new ImapClient();
+if (account.IgnoreSslErrors == true)
+    client.ServerCertificateValidationCallback = (_, _, _, _) => true;
 await client.ConnectAsync(host, port, useTls ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.StartTls, ct);
 await client.AuthenticateAsync(username, password, ct);
 // Report: server banner, CONDSTORE capability, mailbox count
@@ -454,6 +456,8 @@ await client.DisconnectAsync(true, ct);
 
 ```csharp
 using var client = new SmtpClient();
+if (account.IgnoreSslErrors == true)
+    client.ServerCertificateValidationCallback = (_, _, _, _) => true;
 await client.ConnectAsync(host, port, SecureSocketOptions.StartTls, ct);
 await client.AuthenticateAsync(username, password, ct);
 // Report: server greeting
@@ -486,7 +490,13 @@ Tests each calendar URL in the CalDAV account. Uses the account's own username a
 
 ```csharp
 var password = await authRepo.GetCalDavPasswordAsync(accountId, ct);
-using var client = new HttpClient();
+SocketsHttpHandler handler = new();
+if (account.IgnoreSslErrors == true)
+    handler.SslOptions = new SslClientAuthenticationOptions
+    {
+        RemoteCertificateValidationCallback = (_, _, _, _) => true,
+    };
+using var client = new HttpClient(handler);
 var credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{username}:{password}"));
 client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", credentials);
 
@@ -750,7 +760,7 @@ CalDAV accounts use the existing `AccountConfig` record. The relevant fields are
 - `Username` — reuses the existing nullable field (currently IMAP-only)
 - `Calendars` — list of `CalendarSourceConfig` with `Type = CalDav` and `Url` set
 
-No new fields on `AccountConfig` are needed. CalDAV accounts simply don't populate IMAP/SMTP/OAuth fields.
+Additionally, `AccountConfig` has an optional `IgnoreSslErrors` (`bool?`) field. When `true`, IMAP/SMTP connections use `ServerCertificateValidationCallback = (_, _, _, _) => true` and CalDAV/HTTP connections use `SocketsHttpHandler` with the same callback. Exposed as a checkbox in the account wizard for IMAP and CalDAV account types.
 
 **`ConfigLoader.cs`:**
 

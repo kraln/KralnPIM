@@ -14,7 +14,7 @@ public sealed class PimApiClient : IDisposable
     public PimApiClient(string baseUrl)
     {
         _http = new HttpClient { BaseAddress = new Uri(baseUrl) };
-        _jsonOptions = new JsonSerializerOptions();
+        _jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
         _jsonOptions.TypeInfoResolverChain.Add(PimJsonContext.Default);
         _jsonOptions.TypeInfoResolverChain.Add(TuiJsonContext.Default);
     }
@@ -22,7 +22,7 @@ public sealed class PimApiClient : IDisposable
     internal PimApiClient(HttpClient http)
     {
         _http = http;
-        _jsonOptions = new JsonSerializerOptions();
+        _jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
         _jsonOptions.TypeInfoResolverChain.Add(PimJsonContext.Default);
         _jsonOptions.TypeInfoResolverChain.Add(TuiJsonContext.Default);
     }

@@ -13,7 +13,7 @@ public sealed class PimApiClientTests : IDisposable
 
     public PimApiClientTests()
     {
-        _json = new JsonSerializerOptions();
+        _json = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
         _json.TypeInfoResolverChain.Add(PimJsonContext.Default);
         _json.TypeInfoResolverChain.Add(TuiJsonContext.Default);
     }

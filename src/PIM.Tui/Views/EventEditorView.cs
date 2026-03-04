@@ -140,7 +140,7 @@ internal sealed class EventEditorView : View
     {
         _accounts = await _app.SafeApiCallAsync(c => _api.GetAccountsAsync(c)) ?? [];
 
-        App?.Invoke(() =>
+        _app.App?.Invoke(() =>
         {
             _accountCombo.SetSource(new ObservableCollection<string>(
                 _accounts.Select(a => a.DisplayName)));
