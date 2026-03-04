@@ -98,6 +98,7 @@ public static class ConfigSerializer
             Url = c.Url,
         }).ToList(),
         IgnoreSslErrors = account.IgnoreSslErrors,
+        CalDavUrl = account.CalDavUrl,
     };
 
     private static string FormatAccountType(AccountType type) => type switch
@@ -182,6 +183,9 @@ internal sealed class AccountDto
 
     [YamlMember(Order = 13)]
     public bool? IgnoreSslErrors { get; set; }
+
+    [YamlMember(Order = 14)]
+    public string? CalDavUrl { get; set; }
 }
 
 internal sealed class CalendarDto

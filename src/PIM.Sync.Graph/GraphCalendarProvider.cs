@@ -16,6 +16,7 @@ public sealed class GraphCalendarProvider : ICalendarProvider
     private readonly GraphAuthProvider _authProvider;
     private readonly ISyncStateRepository _syncStateRepo;
     private readonly ILogger<GraphCalendarProvider> _logger;
+    private readonly IReadOnlySet<string>? _allowedCalendarIds;
     private GraphServiceClient? _client;
     private List<string> _calendarIds = [];
 
@@ -25,12 +26,14 @@ public sealed class GraphCalendarProvider : ICalendarProvider
         string accountId,
         GraphAuthProvider authProvider,
         ISyncStateRepository syncStateRepo,
-        ILogger<GraphCalendarProvider> logger)
+        ILogger<GraphCalendarProvider> logger,
+        IReadOnlySet<string>? allowedCalendarIds = null)
     {
         AccountId = accountId;
         _authProvider = authProvider;
         _syncStateRepo = syncStateRepo;
         _logger = logger;
+        _allowedCalendarIds = allowedCalendarIds;
     }
 
     public async Task AuthenticateAsync(CancellationToken ct)
@@ -45,7 +48,10 @@ public sealed class GraphCalendarProvider : ICalendarProvider
             .Select(c => c.Id!)
             .ToList() ?? [];
 
-        _logger.LogInformation("Graph Calendar authenticated for {AccountId}, found {Count} calendars",
+        if (_allowedCalendarIds is { Count: > 0 })
+            _calendarIds = _calendarIds.Where(id => _allowedCalendarIds.Contains(id)).ToList();
+
+        _logger.LogInformation("Graph Calendar authenticated for {AccountId}, syncing {Count} calendars",
             AccountId, _calendarIds.Count);
     }
 

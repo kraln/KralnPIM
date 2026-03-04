@@ -96,11 +96,12 @@ public class ConfigLoaderTests
     }
 
     [Fact]
-    public void Load_GoogleNoClient_ThrowsValidation()
+    public void Load_GoogleNoClient_Succeeds()
     {
-        var ex = Assert.Throws<ConfigValidationException>(() =>
-            ConfigLoader.Load(GetTestConfigPath("invalid_google_no_client.yaml")));
-        Assert.Contains(ex.Errors, e => e.Contains("client_id"));
+        // Google accounts without client_id are valid — embedded defaults in DefaultCredentials
+        var config = ConfigLoader.Load(GetTestConfigPath("invalid_google_no_client.yaml"));
+        Assert.Single(config.Accounts);
+        Assert.Null(config.Accounts[0].ClientId);
     }
 
     [Fact]

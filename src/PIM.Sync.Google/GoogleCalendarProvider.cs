@@ -17,6 +17,7 @@ public sealed class GoogleCalendarProvider : ICalendarProvider
     private readonly ISyncStateRepository _syncStateRepo;
     private readonly TokenBucketRateLimiter _rateLimiter;
     private readonly ILogger<GoogleCalendarProvider> _logger;
+    private readonly IReadOnlySet<string>? _allowedCalendarIds;
     private CalendarService? _service;
     private List<string> _calendarIds = [];
 
@@ -27,13 +28,15 @@ public sealed class GoogleCalendarProvider : ICalendarProvider
         GoogleCredentialManager credentialManager,
         ISyncStateRepository syncStateRepo,
         TokenBucketRateLimiter rateLimiter,
-        ILogger<GoogleCalendarProvider> logger)
+        ILogger<GoogleCalendarProvider> logger,
+        IReadOnlySet<string>? allowedCalendarIds = null)
     {
         AccountId = accountId;
         _credentialManager = credentialManager;
         _syncStateRepo = syncStateRepo;
         _rateLimiter = rateLimiter;
         _logger = logger;
+        _allowedCalendarIds = allowedCalendarIds;
     }
 
     public async Task AuthenticateAsync(CancellationToken ct)
@@ -53,7 +56,10 @@ public sealed class GoogleCalendarProvider : ICalendarProvider
             .Where(id => !string.IsNullOrEmpty(id))
             .ToList() ?? [];
 
-        _logger.LogInformation("Google Calendar authenticated for {AccountId}, found {Count} calendars",
+        if (_allowedCalendarIds is { Count: > 0 })
+            _calendarIds = _calendarIds.Where(id => _allowedCalendarIds.Contains(id)).ToList();
+
+        _logger.LogInformation("Google Calendar authenticated for {AccountId}, syncing {Count} calendars",
             AccountId, _calendarIds.Count);
     }
 

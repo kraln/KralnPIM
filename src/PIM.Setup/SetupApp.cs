@@ -23,6 +23,7 @@ internal sealed class SetupApp : Window
     public PimConfig Config { get; set; }
     public DbConnectionFactory? DbFactory { get; private set; }
     public IAuthRepository? AuthRepo { get; private set; }
+    public ICalendarRepository? CalendarRepo { get; private set; }
 
     public SetupApp(string configPath, ILoggerFactory loggerFactory)
     {
@@ -164,6 +165,7 @@ internal sealed class SetupApp : Window
 
             DbFactory = new DbConnectionFactory(dbPath);
             AuthRepo = new SqliteAuthRepository(DbFactory);
+            CalendarRepo = new SqliteCalendarRepository(DbFactory);
 
             var sqlDir = FindSqlDirectory();
             if (sqlDir is not null)

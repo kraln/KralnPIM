@@ -111,6 +111,7 @@ public class ProviderRegistry
             authRepo, loggerFactory.CreateLogger<GoogleCredentialManager>());
 
         var rateLimiter = new TokenBucketRateLimiter(250, 250);
+        var allowedCalendarIds = account.Calendars?.Select(c => c.Id).ToHashSet();
 
         _mailProviders[account.Id] = new GoogleMailProvider(
             account.Id, credMgr, syncStateRepo, rateLimiter,
@@ -119,7 +120,8 @@ public class ProviderRegistry
         _calendarProviders[account.Id] = [
             new GoogleCalendarProvider(
                 account.Id, credMgr, syncStateRepo, rateLimiter,
-                loggerFactory.CreateLogger<GoogleCalendarProvider>())
+                loggerFactory.CreateLogger<GoogleCalendarProvider>(),
+                allowedCalendarIds)
         ];
     }
 
@@ -134,6 +136,7 @@ public class ProviderRegistry
         var graphAuth = new GraphAuthProvider(
             account.Id, o365ClientId, o365TenantId,
             authRepo, loggerFactory.CreateLogger<GraphAuthProvider>());
+        var allowedCalendarIds = account.Calendars?.Select(c => c.Id).ToHashSet();
 
         _mailProviders[account.Id] = new GraphMailProvider(
             account.Id, graphAuth, syncStateRepo,
@@ -142,7 +145,8 @@ public class ProviderRegistry
         _calendarProviders[account.Id] = [
             new GraphCalendarProvider(
                 account.Id, graphAuth, syncStateRepo,
-                loggerFactory.CreateLogger<GraphCalendarProvider>())
+                loggerFactory.CreateLogger<GraphCalendarProvider>(),
+                allowedCalendarIds)
         ];
     }
 

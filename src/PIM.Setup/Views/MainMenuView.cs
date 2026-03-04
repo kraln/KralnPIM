@@ -38,8 +38,9 @@ internal sealed class MainMenuView : View
             "5. Server Settings   Listen address and ports",
             "───────────────────────────────────────────────────────",
             "6. Test All          Run connection tests for all accounts",
-            "7. Save & Exit       Write config and exit",
-            "8. Exit              Exit without saving",
+            "7. Cleanup DB        Remove events from deselected calendars",
+            "8. Save & Exit       Write config and exit",
+            "9. Exit              Exit without saving",
         ]);
 
         var list = new ListView
@@ -73,6 +74,7 @@ internal sealed class MainMenuView : View
             else if (e == new Key('6')) idx = 6;
             else if (e == new Key('7')) idx = 7;
             else if (e == new Key('8')) idx = 8;
+            else if (e == new Key('9')) idx = 9;
 
             if (idx >= 0)
             {
@@ -110,10 +112,13 @@ internal sealed class MainMenuView : View
                 _app.ShowView(new ConnectionTestView(_app, null));
                 break;
             case 7:
+                _app.ShowView(new CleanupView(_app));
+                break;
+            case 8:
                 if (_app.SaveConfig())
                     _app.App?.RequestStop();
                 break;
-            case 8:
+            case 9:
                 _app.ConfirmExit();
                 break;
         }

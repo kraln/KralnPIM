@@ -88,6 +88,37 @@ public sealed class SqliteCalendarRepository : ICalendarRepository
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
+    public async Task<int> DeleteEventsNotInCalendarsAsync(
+        string accountId, IReadOnlySet<string> keepCalendarIds, CancellationToken ct = default)
+    {
+        using var conn = _factory.CreateConnection();
+        using var cmd = conn.CreateCommand();
+
+        if (keepCalendarIds.Count == 0)
+        {
+            // No calendars to keep — delete all events for this account
+            cmd.CommandText = "DELETE FROM calendar_events WHERE account_id = @aid";
+            cmd.Parameters.AddWithValue("@aid", accountId);
+        }
+        else
+        {
+            // Build parameterized IN clause for the calendars to keep
+            var paramNames = new List<string>();
+            var i = 0;
+            foreach (var calId in keepCalendarIds)
+            {
+                var paramName = $"@cid{i}";
+                paramNames.Add(paramName);
+                cmd.Parameters.AddWithValue(paramName, calId);
+                i++;
+            }
+            cmd.CommandText = $"DELETE FROM calendar_events WHERE account_id = @aid AND calendar_id NOT IN ({string.Join(", ", paramNames)})";
+            cmd.Parameters.AddWithValue("@aid", accountId);
+        }
+
+        return await cmd.ExecuteNonQueryAsync(ct);
+    }
+
     public async Task PurgeOlderThanAsync(DateTimeOffset cutoff, CancellationToken ct = default)
     {
         using var conn = _factory.CreateConnection();

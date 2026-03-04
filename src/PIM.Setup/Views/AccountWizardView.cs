@@ -29,6 +29,7 @@ internal sealed partial class AccountWizardView : View
     private string _clientSecret = "";
     private string _tenantId = "";
     private string _password = "";
+    private string _caldavUrl = "";
     private bool _ignoreSslErrors;
     private readonly List<CalendarSourceConfig> _calendars = [];
 
@@ -53,6 +54,7 @@ internal sealed partial class AccountWizardView : View
             _clientSecret = editing.ClientSecret ?? "";
             _tenantId = editing.TenantId ?? "";
             _ignoreSslErrors = editing.IgnoreSslErrors ?? false;
+            _caldavUrl = editing.CalDavUrl ?? "";
             if (editing.Calendars is not null)
                 _calendars.AddRange(editing.Calendars);
             _step = 1; // Skip type selection when editing
@@ -65,8 +67,7 @@ internal sealed partial class AccountWizardView : View
     private int TotalSteps => _accountType switch
     {
         AccountType.Imap => 4,
-        AccountType.CalDav => 4,
-        _ => 3,
+        _ => 4,
     };
 
     private void RenderStep()
@@ -87,11 +88,11 @@ internal sealed partial class AccountWizardView : View
             case 2:
                 RenderAuthTestStep();
                 break;
-            case 3 when _accountType is AccountType.CalDav:
-                RenderCalDavCalendarsStep();
+            case 3 when _accountType is AccountType.Imap:
+                RenderAuthTestStep();
                 break;
             case 3:
-                RenderAuthTestStep();
+                RenderCalendarSelectionStep();
                 break;
         }
     }
@@ -233,6 +234,9 @@ internal sealed partial class AccountWizardView : View
                 break;
 
             case AccountType.CalDav:
+                var caldavUrlLabel = new Label { X = 2, Y = y, Text = "Server URL:" };
+                var caldavUrlField = new TextField { X = 16, Y = y, Width = 50, Text = _caldavUrl };
+                y += 2;
                 var caldavUserLabel = new Label { X = 2, Y = y, Text = "Username:" };
                 var caldavUserField = new TextField { X = 16, Y = y, Width = 30, Text = _username };
                 y += 2;
@@ -242,16 +246,18 @@ internal sealed partial class AccountWizardView : View
                     X = 22, Y = y, Text = "",
                     Value = _ignoreSslErrors ? CheckState.Checked : CheckState.UnChecked,
                 };
-                Add(caldavUserLabel, caldavUserField, caldavSslLabel, caldavSslCheck);
+                Add(caldavUrlLabel, caldavUrlField, caldavUserLabel, caldavUserField,
+                    caldavSslLabel, caldavSslCheck);
 
                 AddNavigationButtons(y + 2, () =>
                 {
                     _id = idField.Text;
                     _displayName = nameField.Text;
+                    _caldavUrl = caldavUrlField.Text;
                     _username = caldavUserField.Text;
                     _ignoreSslErrors = caldavSslCheck.Value == CheckState.Checked;
                     return ValidateDetails();
-                }, [idField, nameField, caldavUserField]);
+                }, [idField, nameField, caldavUrlField, caldavUserField]);
                 break;
         }
 
@@ -291,86 +297,110 @@ internal sealed partial class AccountWizardView : View
         App?.Invoke(() => pwdField.SetFocus());
     }
 
-    private void RenderCalDavCalendarsStep()
+    private void RenderCalendarSelectionStep()
     {
-        var title = new Label { X = 2, Y = 0, Text = $"CalDAV Calendars                              Step 4 of {TotalSteps}" };
+        var stepNum = TotalSteps;
+        var title = new Label { X = 2, Y = 0, Text = $"Calendar Selection                             Step {stepNum} of {stepNum}" };
 
-        var listItems = new ObservableCollection<string>(
-            _calendars.Select(c => $"  {c.Id,-20} {c.Url}"));
+        var statusLabel = new Label { X = 2, Y = 2, Text = "Discovering calendars..." };
+
+        // Discovered calendars: (Id, Name, Url?, selected)
+        var discovered = new List<(string Id, string Name, string? Url, bool Selected)>();
+        var listItems = new ObservableCollection<string>();
         var listView = new ListView
         {
-            X = 2, Y = 2,
+            X = 2, Y = 4,
             Width = Dim.Fill(2),
-            Height = 6,
+            Height = Dim.Fill(6),
             Source = new ListWrapper<string>(listItems),
         };
+        listView.KeystrokeNavigator.Matcher = new NoTypeAheadMatcher();
 
-        var addBtn = new Button { X = 2, Y = 9, Text = "Add Calendar" };
-        var removeBtn = new Button { X = 20, Y = 9, Text = "Remove Selected" };
-
-        var idLabel = new Label { X = 2, Y = 11, Text = "Calendar ID:" };
-        var idField = new TextField { X = 16, Y = 11, Width = 25 };
-        var urlLabel = new Label { X = 2, Y = 12, Text = "CalDAV URL:" };
-        var urlField = new TextField { X = 16, Y = 12, Width = 50 };
-        var okBtn = new Button { X = 16, Y = 13, Text = "OK" };
-
-        // Initially hide the add form
-        idLabel.Visible = false;
-        idField.Visible = false;
-        urlLabel.Visible = false;
-        urlField.Visible = false;
-        okBtn.Visible = false;
-
-        addBtn.Accepting += (_, e) =>
+        // Toggle selection on Enter or Space
+        listView.Accepting += (_, e) =>
         {
             e.Handled = true;
-            idField.Text = "";
-            urlField.Text = "";
-            idLabel.Visible = urlLabel.Visible = idField.Visible = urlField.Visible = okBtn.Visible = true;
-            idField.SetFocus();
+            ToggleCalendarSelection(discovered, listItems, listView);
+        };
+        listView.KeyDown += (_, e) =>
+        {
+            if (e == Key.Space)
+            {
+                ToggleCalendarSelection(discovered, listItems, listView);
+                e.Handled = true;
+            }
         };
 
-        void AddCalendar()
+        var selectAllBtn = new Button { X = 2, Y = Pos.AnchorEnd(4), Text = "Select All" };
+        var selectNoneBtn = new Button { X = 18, Y = Pos.AnchorEnd(4), Text = "Select None" };
+        var addManualBtn = new Button { X = 36, Y = Pos.AnchorEnd(4), Text = "Add Manually" };
+        addManualBtn.Visible = _accountType == AccountType.CalDav;
+
+        selectAllBtn.Accepting += (_, e) =>
         {
-            if (string.IsNullOrWhiteSpace(idField.Text) || string.IsNullOrWhiteSpace(urlField.Text))
+            e.Handled = true;
+            for (var i = 0; i < discovered.Count; i++)
+            {
+                discovered[i] = discovered[i] with { Selected = true };
+                listItems[i] = FormatCalendarLine(discovered[i]);
+            }
+            listView.Source = new ListWrapper<string>(listItems);
+        };
+
+        selectNoneBtn.Accepting += (_, e) =>
+        {
+            e.Handled = true;
+            for (var i = 0; i < discovered.Count; i++)
+            {
+                discovered[i] = discovered[i] with { Selected = false };
+                listItems[i] = FormatCalendarLine(discovered[i]);
+            }
+            listView.Source = new ListWrapper<string>(listItems);
+        };
+
+        // Manual add form (CalDAV only)
+        var manualIdLabel = new Label { X = 2, Y = Pos.AnchorEnd(6), Text = "ID:", Visible = false };
+        var manualIdField = new TextField { X = 6, Y = Pos.AnchorEnd(6), Width = 20, Visible = false };
+        var manualUrlLabel = new Label { X = 28, Y = Pos.AnchorEnd(6), Text = "URL:", Visible = false };
+        var manualUrlField = new TextField { X = 33, Y = Pos.AnchorEnd(6), Width = 30, Visible = false };
+        var manualOkBtn = new Button { X = 65, Y = Pos.AnchorEnd(6), Text = "OK", Visible = false };
+
+        addManualBtn.Accepting += (_, e) =>
+        {
+            e.Handled = true;
+            manualIdField.Text = "";
+            manualUrlField.Text = "";
+            manualIdLabel.Visible = manualIdField.Visible = true;
+            manualUrlLabel.Visible = manualUrlField.Visible = true;
+            manualOkBtn.Visible = true;
+            manualIdField.SetFocus();
+        };
+
+        void AddManualCalendar()
+        {
+            if (string.IsNullOrWhiteSpace(manualIdField.Text) || string.IsNullOrWhiteSpace(manualUrlField.Text))
             {
                 _app.ShowError("Calendar ID and URL are required.");
                 return;
             }
-            if (_calendars.Any(c => c.Id == idField.Text))
+            if (discovered.Any(d => d.Id == manualIdField.Text))
             {
-                _app.ShowError($"Calendar ID '{idField.Text}' already exists.");
+                _app.ShowError($"Calendar '{manualIdField.Text}' already in the list.");
                 return;
             }
-            _calendars.Add(new CalendarSourceConfig(idField.Text, CalendarType.CalDav, urlField.Text));
-            idLabel.Visible = urlLabel.Visible = idField.Visible = urlField.Visible = okBtn.Visible = false;
-            listItems.Add($"  {idField.Text,-20} {urlField.Text}");
+            var entry = (manualIdField.Text, manualIdField.Text, (string?)manualUrlField.Text, true);
+            discovered.Add(entry);
+            listItems.Add(FormatCalendarLine(entry));
             listView.Source = new ListWrapper<string>(listItems);
+            manualIdLabel.Visible = manualIdField.Visible = false;
+            manualUrlLabel.Visible = manualUrlField.Visible = false;
+            manualOkBtn.Visible = false;
         }
 
-        okBtn.Accepting += (_, e) =>
-        {
-            e.Handled = true;
-            AddCalendar();
-        };
+        manualOkBtn.Accepting += (_, e) => { e.Handled = true; AddManualCalendar(); };
+        WireEnterAdvance([manualIdField, manualUrlField], AddManualCalendar);
 
-        WireEnterAdvance([idField, urlField], AddCalendar);
-
-        removeBtn.Accepting += (_, e) =>
-        {
-            e.Handled = true;
-            var idx = listView.SelectedItem ?? -1;
-            if (idx >= 0 && idx < _calendars.Count)
-            {
-                _calendars.RemoveAt(idx);
-                listItems.RemoveAt(idx);
-                listView.Source = new ListWrapper<string>(listItems);
-            }
-        };
-
-        Add(title, listView, addBtn, removeBtn, idLabel, idField, urlLabel, urlField, okBtn);
-
-        // Navigation: Back, Done (saves + runs test), Cancel
+        // Navigation
         var back = new Button { X = Pos.AnchorEnd(34), Y = Pos.AnchorEnd(2), Text = "Back" };
         var done = new Button { X = Pos.AnchorEnd(22), Y = Pos.AnchorEnd(2), Text = "Done" };
         var cancel = new Button { X = Pos.AnchorEnd(10), Y = Pos.AnchorEnd(2), Text = "Cancel" };
@@ -379,18 +409,145 @@ internal sealed partial class AccountWizardView : View
         done.Accepting += (_, e) =>
         {
             e.Handled = true;
-            if (_calendars.Count == 0)
+            var selected = discovered.Where(d => d.Selected).ToList();
+            if (_accountType == AccountType.CalDav && selected.Count == 0)
             {
                 _app.ShowError("At least one calendar is required for CalDAV accounts.");
                 return;
             }
+
+            _calendars.Clear();
+            var calType = _accountType switch
+            {
+                AccountType.Google => CalendarType.Google,
+                AccountType.Office365 => CalendarType.Office365,
+                _ => CalendarType.CalDav,
+            };
+            foreach (var cal in selected)
+                _calendars.Add(new CalendarSourceConfig(cal.Id, calType, cal.Url));
+
             SaveAccount();
             SavePasswordToDb();
+            CleanupDeselectedCalendars();
             _app.ShowView(new AccountListView(_app));
         };
         cancel.Accepting += (_, e) => { _app.ShowView(new AccountListView(_app)); e.Handled = true; };
 
-        Add(back, done, cancel);
+        Add(title, statusLabel, listView, selectAllBtn, selectNoneBtn, addManualBtn,
+            manualIdLabel, manualIdField, manualUrlLabel, manualUrlField, manualOkBtn,
+            back, done, cancel);
+
+        // Run discovery async
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                _app.InitializeDb();
+                var results = await DiscoverCalendarsForAccountAsync();
+
+                var existingIds = new HashSet<string>(_calendars.Select(c => c.Id));
+
+                App?.Invoke(() =>
+                {
+                    foreach (var (id, name, url) in results)
+                    {
+                        var selected = existingIds.Count == 0 || existingIds.Contains(id);
+                        var entry = (id, name, url, selected);
+                        discovered.Add(entry);
+                        listItems.Add(FormatCalendarLine(entry));
+                    }
+
+                    // Also add any existing calendars not found by discovery (e.g. manually added)
+                    foreach (var existing in _calendars.Where(c => !results.Any(r => r.Id == c.Id)))
+                    {
+                        var entry = (existing.Id, existing.Id, existing.Url, true);
+                        discovered.Add(entry);
+                        listItems.Add(FormatCalendarLine(entry));
+                    }
+
+                    listView.Source = new ListWrapper<string>(listItems);
+                    statusLabel.Text = results.Count > 0
+                        ? $"Found {results.Count} calendars. Space/Enter to toggle, then Done."
+                        : "No calendars discovered. Add manually or check auth.";
+                });
+            }
+            catch (Exception ex)
+            {
+                App?.Invoke(() =>
+                {
+                    statusLabel.Text = $"Discovery failed: {ex.Message}";
+                    if (_accountType == AccountType.CalDav)
+                        statusLabel.Text += " Use Add Manually.";
+                });
+            }
+        });
+    }
+
+    private async Task<List<(string Id, string Name, string? Url)>> DiscoverCalendarsForAccountAsync()
+    {
+        switch (_accountType)
+        {
+            case AccountType.Google:
+            {
+                if (_app.AuthRepo is null)
+                    throw new InvalidOperationException("No database available.");
+                var gCid = string.IsNullOrWhiteSpace(_clientId)
+                    ? PIM.Core.DefaultCredentials.Google.ClientId : _clientId;
+                var gSec = string.IsNullOrWhiteSpace(_clientSecret)
+                    ? PIM.Core.DefaultCredentials.Google.ClientSecret : _clientSecret;
+                var results = await CalendarDiscovery.DiscoverGoogleCalendarsAsync(
+                    _app.AuthRepo, _id, gCid, gSec, CancellationToken.None);
+                return results.Select(r => (r.Id, r.Name, (string?)null)).ToList();
+            }
+            case AccountType.Office365:
+            {
+                if (_app.AuthRepo is null)
+                    throw new InvalidOperationException("No database available.");
+                var oCid = string.IsNullOrWhiteSpace(_clientId)
+                    ? PIM.Core.DefaultCredentials.Office365.ClientId : _clientId;
+                var oTid = string.IsNullOrWhiteSpace(_tenantId)
+                    ? PIM.Core.DefaultCredentials.Office365.TenantId : _tenantId;
+                var results = await CalendarDiscovery.DiscoverO365CalendarsAsync(
+                    _app.AuthRepo, _id, oCid, oTid, CancellationToken.None);
+                return results.Select(r => (r.Id, r.Name, (string?)null)).ToList();
+            }
+            case AccountType.CalDav:
+            {
+                if (string.IsNullOrWhiteSpace(_caldavUrl))
+                    throw new InvalidOperationException("No server URL configured.");
+                if (string.IsNullOrWhiteSpace(_username))
+                    throw new InvalidOperationException("No username configured.");
+                var password = _password;
+                if (string.IsNullOrEmpty(password) && _app.AuthRepo is not null)
+                    password = await _app.AuthRepo.GetCalDavPasswordAsync(_id) ?? "";
+                if (string.IsNullOrEmpty(password))
+                    throw new InvalidOperationException("No password available.");
+                var results = await CalendarDiscovery.DiscoverCalDavCalendarsAsync(
+                    _caldavUrl, _username, password, _ignoreSslErrors, CancellationToken.None);
+                return results.Select(r => (r.Id, r.Name, (string?)r.Url)).ToList();
+            }
+            default:
+                return [];
+        }
+    }
+
+    private static void ToggleCalendarSelection(
+        List<(string Id, string Name, string? Url, bool Selected)> discovered,
+        ObservableCollection<string> listItems,
+        ListView listView)
+    {
+        var idx = listView.SelectedItem ?? -1;
+        if (idx < 0 || idx >= discovered.Count) return;
+        discovered[idx] = discovered[idx] with { Selected = !discovered[idx].Selected };
+        listItems[idx] = FormatCalendarLine(discovered[idx]);
+        listView.Source = new ListWrapper<string>(listItems);
+    }
+
+    private static string FormatCalendarLine((string Id, string Name, string? Url, bool Selected) cal)
+    {
+        var check = cal.Selected ? "[x]" : "[ ]";
+        var display = cal.Name.Length > 45 ? cal.Name[..45] + "..." : cal.Name;
+        return $"  {check} {display}";
     }
 
     private void RenderAuthTestStep()
@@ -488,7 +645,15 @@ internal sealed partial class AccountWizardView : View
             e.Handled = true;
             SaveAccount();
             SavePasswordToDb();
-            _app.ShowView(new AccountListView(_app));
+            if (_step < TotalSteps - 1)
+            {
+                _step++;
+                RenderStep();
+            }
+            else
+            {
+                _app.ShowView(new AccountListView(_app));
+            }
         };
 
         backBtn.Accepting += (_, e) => { _step--; RenderStep(); e.Handled = true; };
@@ -602,8 +767,10 @@ internal sealed partial class AccountWizardView : View
             ClientId: null,
             ClientSecret: null,
             TenantId: null,
-            Calendars: _accountType == AccountType.CalDav ? _calendars.ToList() : null,
-            IgnoreSslErrors: _ignoreSslErrors ? true : null
+            Calendars: _accountType is AccountType.CalDav or AccountType.Google or AccountType.Office365
+                ? (_calendars.Count > 0 ? _calendars.ToList() : null) : null,
+            IgnoreSslErrors: _ignoreSslErrors ? true : null,
+            CalDavUrl: _accountType == AccountType.CalDav && !string.IsNullOrWhiteSpace(_caldavUrl) ? _caldavUrl : null
         );
 
         var accounts = _app.Config.Accounts.ToList();
@@ -623,6 +790,24 @@ internal sealed partial class AccountWizardView : View
 
         _app.Config = _app.Config with { Accounts = accounts };
         _app.MarkChanged();
+    }
+
+    private void CleanupDeselectedCalendars()
+    {
+        if (_calendars.Count == 0 || _app.CalendarRepo is null)
+            return;
+
+        var keepIds = _calendars.Select(c => c.Id).ToHashSet();
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var deleted = await _app.CalendarRepo.DeleteEventsNotInCalendarsAsync(_id, keepIds);
+                if (deleted > 0)
+                    App?.Invoke(() => _app.ShowStatus($"Cleaned up {deleted} events from deselected calendars."));
+            }
+            catch { /* best effort */ }
+        });
     }
 
     private void SavePasswordToDb()

@@ -30,7 +30,8 @@ public sealed record AccountConfig(
     string? ClientSecret,
     string? TenantId,
     List<CalendarSourceConfig>? Calendars,
-    bool? IgnoreSslErrors = null
+    bool? IgnoreSslErrors = null,
+    string? CalDavUrl = null
 );
 
 public sealed record CalendarSourceConfig(
