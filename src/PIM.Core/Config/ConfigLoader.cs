@@ -78,7 +78,8 @@ public static class ConfigLoader
             dto.ClientId,
             dto.ClientSecret,
             dto.TenantId,
-            calendars
+            calendars,
+            dto.IgnoreSslErrors
         );
     }
 
@@ -208,6 +209,7 @@ public static class ConfigLoader
         public string? ClientSecret { get; set; }
         public string? TenantId { get; set; }
         public List<CalendarDto>? Calendars { get; set; }
+        public bool? IgnoreSslErrors { get; set; }
     }
 
     private sealed class CalendarDto

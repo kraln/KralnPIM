@@ -19,4 +19,7 @@ using IApplication guiApp = Application.Create();
 guiApp.Init();
 
 using var app = new SetupApp(configPath, loggerFactory);
-guiApp.Run(app);
+
+// Terminal.Gui can throw on mouse events (e.g. right-click clipboard access on Linux).
+// Return true to swallow the exception and keep running.
+guiApp.Run(app, errorHandler: _ => true);

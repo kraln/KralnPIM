@@ -29,6 +29,7 @@ internal sealed partial class AccountWizardView : View
     private string _clientSecret = "";
     private string _tenantId = "";
     private string _password = "";
+    private bool _ignoreSslErrors;
     private readonly List<CalendarSourceConfig> _calendars = [];
 
     public AccountWizardView(SetupApp app, AccountConfig? editing)
@@ -51,6 +52,7 @@ internal sealed partial class AccountWizardView : View
             _clientId = editing.ClientId ?? "";
             _clientSecret = editing.ClientSecret ?? "";
             _tenantId = editing.TenantId ?? "";
+            _ignoreSslErrors = editing.IgnoreSslErrors ?? false;
             if (editing.Calendars is not null)
                 _calendars.AddRange(editing.Calendars);
             _step = 1; // Skip type selection when editing
@@ -236,13 +238,21 @@ internal sealed partial class AccountWizardView : View
             case AccountType.CalDav:
                 var caldavUserLabel = new Label { X = 2, Y = y, Text = "Username:" };
                 var caldavUserField = new TextField { X = 16, Y = y, Width = 30, Text = _username };
-                Add(caldavUserLabel, caldavUserField);
+                y += 2;
+                var caldavSslLabel = new Label { X = 2, Y = y, Text = "Ignore SSL Errors:" };
+                var caldavSslCheck = new CheckBox
+                {
+                    X = 22, Y = y, Text = "",
+                    Value = _ignoreSslErrors ? CheckState.Checked : CheckState.UnChecked,
+                };
+                Add(caldavUserLabel, caldavUserField, caldavSslLabel, caldavSslCheck);
 
                 AddNavigationButtons(y + 2, () =>
                 {
                     _id = idField.Text;
                     _displayName = nameField.Text;
                     _username = caldavUserField.Text;
+                    _ignoreSslErrors = caldavSslCheck.Value == CheckState.Checked;
                     return ValidateDetails();
                 }, [idField, nameField, caldavUserField]);
                 break;
@@ -595,7 +605,8 @@ internal sealed partial class AccountWizardView : View
             ClientId: _accountType is AccountType.Google or AccountType.Office365 ? _clientId : null,
             ClientSecret: _accountType == AccountType.Google ? _clientSecret : null,
             TenantId: _accountType == AccountType.Office365 ? _tenantId : null,
-            Calendars: _accountType == AccountType.CalDav ? _calendars.ToList() : null
+            Calendars: _accountType == AccountType.CalDav ? _calendars.ToList() : null,
+            IgnoreSslErrors: _ignoreSslErrors ? true : null
         );
 
         var accounts = _app.Config.Accounts.ToList();

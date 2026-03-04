@@ -29,5 +29,5 @@ using IApplication guiApp = Application.Create();
 guiApp.Init();
 
 using var tuiApp = new TuiApp(apiClient, wsClient);
-guiApp.Run(tuiApp);
+guiApp.Run(tuiApp, errorHandler: _ => true);
 await wsClient.DisposeAsync();

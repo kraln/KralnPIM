@@ -187,7 +187,23 @@ public class ProviderRegistry
         {
             if (calConfig.Type == CalendarType.CalDav)
             {
-                var httpClient = httpClientFactory.CreateClient($"caldav-{calConfig.Id}");
+                HttpClient httpClient;
+                if (account.IgnoreSslErrors == true)
+                {
+                    var handler = new SocketsHttpHandler
+                    {
+                        SslOptions = new System.Net.Security.SslClientAuthenticationOptions
+                        {
+                            RemoteCertificateValidationCallback = (_, _, _, _) => true,
+                        }
+                    };
+                    httpClient = new HttpClient(handler);
+                }
+                else
+                {
+                    httpClient = httpClientFactory.CreateClient($"caldav-{calConfig.Id}");
+                }
+
                 calendars.Add(new CalDavCalendarProvider(
                     account.Id, calConfig.Id, calConfig.Url!,
                     account.Username!, authRepo, syncStateRepo,

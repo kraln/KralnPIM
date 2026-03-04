@@ -74,7 +74,8 @@ public class ConfigSerializerTests
                     Calendars:
                     [
                         new CalendarSourceConfig("home", CalendarType.CalDav, "https://cal.example.com/home.ics"),
-                    ]),
+                    ],
+                    IgnoreSslErrors: true),
             ],
             Ui: new UiConfig("America/New_York", "Europe/London"),
             System: new SystemConfig("40.7,-74.0", "open-meteo"),
@@ -117,6 +118,7 @@ public class ConfigSerializerTests
             Assert.Equal("home", caldav.Calendars[0].Id);
             Assert.Equal(CalendarType.CalDav, caldav.Calendars[0].Type);
             Assert.Equal("https://cal.example.com/home.ics", caldav.Calendars[0].Url);
+            Assert.True(caldav.IgnoreSslErrors);
 
             // Settings
             Assert.Equal("America/New_York", loaded.Ui.TimezonePrimary);

@@ -29,7 +29,8 @@ public sealed record AccountConfig(
     string? ClientId,
     string? ClientSecret,
     string? TenantId,
-    List<CalendarSourceConfig>? Calendars
+    List<CalendarSourceConfig>? Calendars,
+    bool? IgnoreSslErrors = null
 );
 
 public sealed record CalendarSourceConfig(

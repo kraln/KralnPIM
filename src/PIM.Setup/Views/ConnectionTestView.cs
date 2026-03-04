@@ -93,6 +93,8 @@ internal sealed class ConnectionTestView : View
             catch (Exception ex)
             {
                 AppendLine($"  Error: {ex.Message}");
+                for (var inner = ex.InnerException; inner is not null; inner = inner.InnerException)
+                    AppendLine($"    -> {inner.Message}");
             }
 
             AppendLine("");
@@ -313,7 +315,16 @@ internal sealed class ConnectionTestView : View
             return;
         }
 
-        using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+        var ignoreSsl = account.IgnoreSslErrors == true;
+        AppendLine($"  CalDAV: IgnoreSslErrors={ignoreSsl}");
+
+        SocketsHttpHandler handler = new();
+        if (ignoreSsl)
+            handler.SslOptions = new System.Net.Security.SslClientAuthenticationOptions
+            {
+                RemoteCertificateValidationCallback = (_, _, _, _) => true,
+            };
+        using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(15) };
         var credentials = Convert.ToBase64String(
             Encoding.UTF8.GetBytes($"{account.Username}:{password}"));
         client.DefaultRequestHeaders.Authorization =

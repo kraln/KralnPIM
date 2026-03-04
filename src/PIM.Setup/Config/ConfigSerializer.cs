@@ -80,6 +80,7 @@ public static class ConfigSerializer
             Type = FormatCalendarType(c.Type),
             Url = c.Url,
         }).ToList(),
+        IgnoreSslErrors = account.IgnoreSslErrors,
     };
 
     private static string FormatAccountType(AccountType type) => type switch
@@ -161,6 +162,9 @@ internal sealed class AccountDto
 
     [YamlMember(Order = 12)]
     public List<CalendarDto>? Calendars { get; set; }
+
+    [YamlMember(Order = 13)]
+    public bool? IgnoreSslErrors { get; set; }
 }
 
 internal sealed class CalendarDto
