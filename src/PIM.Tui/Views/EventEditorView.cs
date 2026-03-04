@@ -31,7 +31,8 @@ internal sealed class EventEditorView : View
 
     private List<AccountOverview> _accounts = [];
 
-    public EventEditorView(PimApiClient api, TuiApp app, CalendarEvent? existing, Action onClose)
+    public EventEditorView(PimApiClient api, TuiApp app, CalendarEvent? existing, Action onClose,
+        DateTimeOffset? suggestedStart = null)
     {
         _api = api;
         _app = app;
@@ -44,7 +45,7 @@ internal sealed class EventEditorView : View
         Height = Dim.Fill();
 
         var title = existing is null ? "New Event" : "Edit Event";
-        var now = DateTimeOffset.Now;
+        var now = existing?.Start ?? suggestedStart ?? DateTimeOffset.Now;
 
         var y = 0;
 
@@ -63,8 +64,9 @@ internal sealed class EventEditorView : View
         y++;
 
         Add(new Label { X = 0, Y = y, Text = "End:" });
-        _endDateField = new DateField { X = 12, Y = y, Value = (existing?.End ?? now.AddHours(1)).DateTime };
-        _endTimeField = new TimeField { X = 26, Y = y, Value = (existing?.End ?? now.AddHours(1)).TimeOfDay };
+        var defaultEnd = existing?.End ?? (suggestedStart?.AddHours(1) ?? now.AddHours(1));
+        _endDateField = new DateField { X = 12, Y = y, Value = defaultEnd.DateTime };
+        _endTimeField = new TimeField { X = 26, Y = y, Value = defaultEnd.TimeOfDay };
         Add(_endDateField, _endTimeField);
         y++;
 

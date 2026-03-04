@@ -1,7 +1,6 @@
 using System.Collections.ObjectModel;
 using PIM.Core.Models;
 using PIM.Tui.Client;
-using Terminal.Gui.App;
 using Terminal.Gui.Input;
 using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
@@ -16,13 +15,11 @@ internal sealed class CalendarTab : View
     private readonly FrameView _agendaFrame;
     private readonly FrameView _timelineFrame;
     private readonly ListView _agendaList;
-    private readonly FrameView[] _dayColumns;
-    private readonly ListView[] _dayLists;
+    private readonly TimeGridView _gridView;
 
     private EventEditorView? _editorView;
     private DateTimeOffset _windowStart;
     private List<CalendarEvent> _todayEvents = [];
-    private List<CalendarEvent> _windowEvents = [];
 
     public CalendarTab(PimApiClient api, TuiApp app)
     {
@@ -32,7 +29,7 @@ internal sealed class CalendarTab : View
         X = 0; Y = 0; Width = Dim.Fill(); Height = Dim.Fill();
         _windowStart = DateTimeOffset.Now.Date;
 
-        // Left pane: today's agenda
+        // Left pane: upcoming agenda
         _agendaFrame = new FrameView
         {
             Title = "Agenda",
@@ -49,7 +46,7 @@ internal sealed class CalendarTab : View
         };
         _agendaFrame.Add(_agendaList);
 
-        // Right pane: 4-day timeline
+        // Right pane: 4-day time grid
         _timelineFrame = new FrameView
         {
             Title = "Timeline",
@@ -59,70 +56,43 @@ internal sealed class CalendarTab : View
             Height = Dim.Fill()
         };
 
-        _dayColumns = new FrameView[4];
-        _dayLists = new ListView[4];
-
-        for (var i = 0; i < 4; i++)
-        {
-            _dayColumns[i] = new FrameView
+        _gridView = new TimeGridView(
+            app,
+            onWindowShift: shift =>
             {
-                X = Pos.Percent(i * 25),
-                Y = 0,
-                Width = Dim.Percent(25),
-                Height = Dim.Fill()
-            };
-
-            _dayLists[i] = new ListView
+                _windowStart = _windowStart.AddDays(shift);
+                _ = RefreshTimelineAsync(CancellationToken.None);
+            },
+            onEditEvent: evt =>
             {
-                X = 0, Y = 0,
-                Width = Dim.Fill(),
-                Height = Dim.Fill()
-            };
+                if (_editorView is null)
+                    OpenEditor(evt);
+            },
+            onNewEvent: startTime =>
+            {
+                if (_editorView is null)
+                    OpenEditor(null, startTime);
+            });
 
-            _dayColumns[i].Add(_dayLists[i]);
-            _timelineFrame.Add(_dayColumns[i]);
-        }
+        _timelineFrame.Add(_gridView);
 
         Add(_agendaFrame, _timelineFrame);
 
-        // Key handlers go on ListViews (the focused controls) so they fire before type-ahead search
-        void HandleCalendarKey(object? sender, Key e)
+        // Agenda list key handlers
+        _agendaList.KeyDown += (_, e) =>
         {
-            if (e == Key.CursorLeft)
+            if (e == Key.N && _editorView is null)
             {
-                _windowStart = _windowStart.AddDays(-1);
-                _ = RefreshTimelineAsync(CancellationToken.None);
+                OpenEditor(null, DateTimeOffset.Now);
                 e.Handled = true;
             }
-            else if (e == Key.CursorRight)
+            else if (e == Key.Enter && _editorView is null)
             {
-                _windowStart = _windowStart.AddDays(1);
-                _ = RefreshTimelineAsync(CancellationToken.None);
+                TryEditSelectedAgendaEvent();
                 e.Handled = true;
             }
-            else if (e == Key.N)
-            {
-                if (_editorView is null)
-                {
-                    OpenEditor(null);
-                    e.Handled = true;
-                }
-            }
-            else if (e == Key.Enter)
-            {
-                if (_editorView is null)
-                    TryEditSelectedEvent();
-                e.Handled = true;
-            }
-        }
-
-        _agendaList.KeyDown += HandleCalendarKey;
+        };
         _app.RegisterQuitKey(_agendaList);
-        for (var i = 0; i < 4; i++)
-        {
-            _dayLists[i].KeyDown += HandleCalendarKey;
-            _app.RegisterQuitKey(_dayLists[i]);
-        }
 
         Initialized += (_, _) => _ = RefreshAsync(CancellationToken.None);
     }
@@ -165,73 +135,31 @@ internal sealed class CalendarTab : View
 
         if (events is null) return;
 
-        _windowEvents = events;
-
         _app.App?.Invoke(() =>
         {
             _timelineFrame.Title = $"Timeline: {_windowStart:MMM d} - {end.AddDays(-1):MMM d}";
-
-            for (var i = 0; i < 4; i++)
-            {
-                var day = _windowStart.AddDays(i);
-                var dayEnd = day.AddDays(1);
-                _dayColumns[i].Title = $"{day:ddd d}";
-
-                var dayEvents = _windowEvents
-                    .Where(e => e.Start < dayEnd && e.End > day)
-                    .OrderBy(e => e.Start)
-                    .ToList();
-
-                _dayLists[i].SetSource(new ObservableCollection<string>(dayEvents
-                    .Select(e =>
-                    {
-                        var start = e.Start.ToLocalTime().ToString("HH:mm");
-                        var endStr = e.End.ToLocalTime().ToString("HH:mm");
-                        return $"{start}-{endStr} {e.Summary}";
-                    })));
-            }
+            _gridView.SetEvents(_windowStart, events);
         });
     }
 
-    private void TryEditSelectedEvent()
+    private void TryEditSelectedAgendaEvent()
     {
-        for (var i = 0; i < 4; i++)
-        {
-            if (!_dayLists[i].HasFocus) continue;
-
-            var idx = _dayLists[i].SelectedItem ?? -1;
-            var day = _windowStart.AddDays(i);
-            var dayEnd = day.AddDays(1);
-            var dayEvents = _windowEvents
-                .Where(e => e.Start < dayEnd && e.End > day)
-                .OrderBy(e => e.Start)
-                .ToList();
-
-            if (idx >= 0 && idx < dayEvents.Count)
-                OpenEditor(dayEvents[idx]);
-
-            return;
-        }
+        var idx = _agendaList.SelectedItem ?? -1;
+        if (idx >= 0 && idx < _todayEvents.Count)
+            OpenEditor(_todayEvents[idx]);
     }
 
-    private void OpenEditor(CalendarEvent? existingEvent)
+    private void OpenEditor(CalendarEvent? existingEvent, DateTimeOffset? suggestedStart = null)
     {
         _editorView = new EventEditorView(_api, _app, existingEvent, onClose: () =>
         {
             _timelineFrame.Remove(_editorView!);
             _editorView = null;
-
-            // Restore day columns
-            foreach (var col in _dayColumns)
-                col.Visible = true;
-
+            _gridView.Visible = true;
             _ = RefreshAsync(CancellationToken.None);
-        });
+        }, suggestedStart: suggestedStart);
 
-        // Hide day columns, show editor
-        foreach (var col in _dayColumns)
-            col.Visible = false;
-
+        _gridView.Visible = false;
         _timelineFrame.Add(_editorView);
         _editorView.SetFocus();
     }
