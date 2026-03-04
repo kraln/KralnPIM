@@ -138,6 +138,8 @@ internal sealed class ConnectionTestView : View
         if (password is null) { AppendLine("  IMAP: No password stored."); return; }
 
         using var client = new ImapClient();
+        if (account.IgnoreSslErrors == true)
+            client.ServerCertificateValidationCallback = (_, _, _, _) => true;
         var options = account.ImapTls == true
             ? SecureSocketOptions.SslOnConnect
             : SecureSocketOptions.StartTls;
@@ -168,6 +170,8 @@ internal sealed class ConnectionTestView : View
         if (password is null) { AppendLine("  SMTP: No password stored."); return; }
 
         using var client = new SmtpClient();
+        if (account.IgnoreSslErrors == true)
+            client.ServerCertificateValidationCallback = (_, _, _, _) => true;
         await client.ConnectAsync(account.SmtpHost, account.SmtpPort ?? 587, SecureSocketOptions.StartTls, ct);
         await client.AuthenticateAsync(account.Username ?? "", password, ct);
 

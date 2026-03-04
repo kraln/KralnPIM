@@ -23,11 +23,14 @@ public sealed class ImapConnectionManager : IAsyncDisposable
 
     public bool SupportsCondstore { get; private set; }
 
+    private readonly bool _ignoreSslErrors;
+
     public ImapConnectionManager(
         string imapHost, int imapPort, bool imapUseTls,
         string smtpHost, int smtpPort,
         string username, string password,
-        ILogger logger)
+        ILogger logger,
+        bool ignoreSslErrors = false)
     {
         ArgumentException.ThrowIfNullOrEmpty(imapHost);
         ArgumentException.ThrowIfNullOrEmpty(smtpHost);
@@ -42,6 +45,7 @@ public sealed class ImapConnectionManager : IAsyncDisposable
         _username = username;
         _password = password;
         _logger = logger;
+        _ignoreSslErrors = ignoreSslErrors;
     }
 
     public async Task<ImapClient> GetImapClientAsync(CancellationToken ct)
@@ -57,6 +61,8 @@ public sealed class ImapConnectionManager : IAsyncDisposable
 
             _imapClient?.Dispose();
             _imapClient = new ImapClient();
+            if (_ignoreSslErrors)
+                _imapClient.ServerCertificateValidationCallback = (_, _, _, _) => true;
 
             var tlsOptions = _imapPort == 993
                 ? SecureSocketOptions.SslOnConnect
@@ -93,6 +99,8 @@ public sealed class ImapConnectionManager : IAsyncDisposable
     public async Task<SmtpClient> CreateSmtpClientAsync(CancellationToken ct)
     {
         var client = new SmtpClient();
+        if (_ignoreSslErrors)
+            client.ServerCertificateValidationCallback = (_, _, _, _) => true;
 
         var tlsOptions = _smtpPort == 465
             ? SecureSocketOptions.SslOnConnect

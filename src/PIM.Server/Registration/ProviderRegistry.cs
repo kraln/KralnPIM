@@ -160,7 +160,8 @@ public class ProviderRegistry
             account.ImapHost!, account.ImapPort!.Value, account.ImapTls ?? true,
             account.SmtpHost!, account.SmtpPort!.Value,
             account.Username!, password,
-            loggerFactory.CreateLogger<ImapConnectionManager>());
+            loggerFactory.CreateLogger<ImapConnectionManager>(),
+            account.IgnoreSslErrors == true);
 
         _mailProviders[account.Id] = new ImapMailProvider(
             account.Id, connMgr, syncStateRepo,

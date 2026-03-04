@@ -181,9 +181,17 @@ internal sealed partial class AccountWizardView : View
                 y += 2;
                 var userLabel = new Label { X = 2, Y = y, Text = "Username:" };
                 var userField = new TextField { X = 16, Y = y, Width = 30, Text = _username };
+                y += 2;
+                var imapSslLabel = new Label { X = 2, Y = y, Text = "Ignore SSL Errors:" };
+                var imapSslCheck = new CheckBox
+                {
+                    X = 22, Y = y, Text = "",
+                    Value = _ignoreSslErrors ? CheckState.Checked : CheckState.UnChecked,
+                };
                 Add(imapHostLabel, imapHostField, imapPortLabel, imapPortField,
                     tlsLabel, tlsCheck, smtpHostLabel, smtpHostField,
-                    smtpPortLabel, smtpPortField, userLabel, userField);
+                    smtpPortLabel, smtpPortField, userLabel, userField,
+                    imapSslLabel, imapSslCheck);
 
                 AddNavigationButtons(y + 2, () =>
                 {
@@ -195,6 +203,7 @@ internal sealed partial class AccountWizardView : View
                     _smtpHost = smtpHostField.Text;
                     _ = int.TryParse(smtpPortField.Text, out _smtpPort);
                     _username = userField.Text;
+                    _ignoreSslErrors = imapSslCheck.Value == CheckState.Checked;
                     return ValidateDetails();
                 }, [idField, nameField, imapHostField, imapPortField, smtpHostField, smtpPortField, userField]);
                 break;
