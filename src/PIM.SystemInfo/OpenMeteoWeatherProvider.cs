@@ -8,7 +8,7 @@ namespace PIM.SystemInfo;
 
 public sealed class OpenMeteoWeatherProvider : IWeatherProvider
 {
-    private static readonly WeatherInfo Fallback = new(0, "Unknown", 0, 0);
+    private static readonly WeatherInfo Fallback = new(0, "Unknown", 0, 0, []);
 
     private readonly HttpClient _httpClient;
     private readonly ILogger<OpenMeteoWeatherProvider> _logger;
@@ -25,7 +25,7 @@ public sealed class OpenMeteoWeatherProvider : IWeatherProvider
         {
             var url = string.Format(
                 CultureInfo.InvariantCulture,
-                "https://api.open-meteo.com/v1/forecast?latitude={0}&longitude={1}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m",
+                "https://api.open-meteo.com/v1/forecast?latitude={0}&longitude={1}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&daily=sunrise,sunset,weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=7",
                 lat, lon);
 
             var response = await _httpClient.GetAsync(url, ct);
@@ -43,7 +43,50 @@ public sealed class OpenMeteoWeatherProvider : IWeatherProvider
 
             var condition = MapWeatherCode(weatherCode);
 
-            return new WeatherInfo(temperature, condition, humidity, windSpeed);
+            var dailyForecasts = new List<DailyForecast>();
+            if (doc.RootElement.TryGetProperty("daily", out var daily))
+            {
+                var dates = daily.TryGetProperty("time", out var timeArr) ? timeArr : default;
+                var sunrises = daily.TryGetProperty("sunrise", out var srArr) ? srArr : default;
+                var sunsets = daily.TryGetProperty("sunset", out var ssArr) ? ssArr : default;
+                var codes = daily.TryGetProperty("weather_code", out var wcArr) ? wcArr : default;
+                var highs = daily.TryGetProperty("temperature_2m_max", out var hiArr) ? hiArr : default;
+                var lows = daily.TryGetProperty("temperature_2m_min", out var loArr) ? loArr : default;
+
+                var count = dates.ValueKind == JsonValueKind.Array ? dates.GetArrayLength() : 0;
+                for (var i = 0; i < count; i++)
+                {
+                    DateOnly date = default;
+                    if (dates[i].GetString() is { } ds && DateOnly.TryParse(ds, out var d))
+                        date = d;
+
+                    TimeOnly? sunrise = null;
+                    if (sunrises.ValueKind == JsonValueKind.Array && i < sunrises.GetArrayLength()
+                        && sunrises[i].GetString() is { } srs && DateTime.TryParse(srs, out var srDt))
+                        sunrise = TimeOnly.FromDateTime(srDt);
+
+                    TimeOnly? sunset = null;
+                    if (sunsets.ValueKind == JsonValueKind.Array && i < sunsets.GetArrayLength()
+                        && sunsets[i].GetString() is { } sss && DateTime.TryParse(sss, out var ssDt))
+                        sunset = TimeOnly.FromDateTime(ssDt);
+
+                    string? dayCondition = null;
+                    if (codes.ValueKind == JsonValueKind.Array && i < codes.GetArrayLength())
+                        dayCondition = MapWeatherCode(codes[i].GetInt32());
+
+                    double? high = null;
+                    if (highs.ValueKind == JsonValueKind.Array && i < highs.GetArrayLength())
+                        high = highs[i].GetDouble();
+
+                    double? low = null;
+                    if (lows.ValueKind == JsonValueKind.Array && i < lows.GetArrayLength())
+                        low = lows[i].GetDouble();
+
+                    dailyForecasts.Add(new DailyForecast(date, sunrise, sunset, dayCondition, high, low));
+                }
+            }
+
+            return new WeatherInfo(temperature, condition, humidity, windSpeed, dailyForecasts);
         }
         catch (Exception ex)
         {

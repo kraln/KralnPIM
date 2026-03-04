@@ -14,12 +14,14 @@ internal sealed class DashboardTab : View
     private readonly TuiApp _app;
 
     private readonly FrameView _agendaFrame;
+    private readonly FrameView _weatherFrame;
     private readonly FrameView _systemFrame;
     private readonly FrameView _mailFrame;
 
     private readonly ListView _agendaList;
     private readonly Label _dateLabel;
-    private readonly Label _weatherLabel;
+    private readonly Label _currentWeatherLabel;
+    private readonly Label _forecastLabel;
     private readonly Label _powerLabel;
     private readonly Label _clockLabel;
     private readonly ListView _accountList;
@@ -52,27 +54,42 @@ internal sealed class DashboardTab : View
         };
         _agendaFrame.Add(_agendaList);
 
+        var today = DateTimeOffset.Now;
+        var week = System.Globalization.ISOWeek.GetWeekOfYear(today.DateTime);
+
+        // Weather frame: date, current conditions, forecast
+        _weatherFrame = new FrameView
+        {
+            Title = "Weather",
+            X = Pos.Right(_agendaFrame),
+            Y = 0,
+            Width = Dim.Percent(30),
+            Height = Dim.Percent(60)
+        };
+
+        _dateLabel = new Label { X = 0, Y = 0, Width = Dim.Fill(), Text = $"{today:dddd, d MMMM yyyy}  (W{week})" };
+        _currentWeatherLabel = new Label { X = 0, Y = 1, Width = Dim.Fill(), Text = "loading..." };
+        _forecastLabel = new Label { X = 0, Y = 3, Width = Dim.Fill(), Height = 5, Text = "" };
+        _weatherFrame.Add(_dateLabel, _currentWeatherLabel, _forecastLabel);
+
+        // System frame: power, clocks
         _systemFrame = new FrameView
         {
             Title = "System",
             X = Pos.Right(_agendaFrame),
-            Y = 0,
+            Y = Pos.Bottom(_weatherFrame),
             Width = Dim.Percent(30),
             Height = Dim.Fill()
         };
 
-        var today = DateTimeOffset.Now;
-        var week = System.Globalization.ISOWeek.GetWeekOfYear(today.DateTime);
-        _dateLabel = new Label { X = 0, Y = 0, Width = Dim.Fill(), Text = $"{today:dddd, d MMMM yyyy}  (W{week})" };
-        _weatherLabel = new Label { X = 0, Y = 2, Width = Dim.Fill(), Text = "Weather: loading..." };
-        _powerLabel = new Label { X = 0, Y = 3, Width = Dim.Fill(), Text = "Power: loading..." };
-        _clockLabel = new Label { X = 0, Y = 5, Width = Dim.Fill(), Height = 4, Text = "Clock: loading..." };
-        _systemFrame.Add(_dateLabel, _weatherLabel, _powerLabel, _clockLabel);
+        _powerLabel = new Label { X = 0, Y = 0, Width = Dim.Fill(), Text = "Power: loading..." };
+        _clockLabel = new Label { X = 0, Y = 2, Width = Dim.Fill(), Height = Dim.Fill(), Text = "Clock: loading..." };
+        _systemFrame.Add(_powerLabel, _clockLabel);
 
         _mailFrame = new FrameView
         {
             Title = "Mail Overview",
-            X = Pos.Right(_systemFrame),
+            X = Pos.Right(_weatherFrame),
             Y = 0,
             Width = Dim.Fill(),
             Height = Dim.Fill()
@@ -93,7 +110,7 @@ internal sealed class DashboardTab : View
         };
         _mailFrame.Add(_accountList, _recentMailList);
 
-        Add(_agendaFrame, _systemFrame, _mailFrame);
+        Add(_agendaFrame, _weatherFrame, _systemFrame, _mailFrame);
 
         // Register Q-to-quit on ListViews so it fires before type-ahead search
         _app.RegisterQuitKey(_agendaList);
@@ -177,9 +194,36 @@ internal sealed class DashboardTab : View
             _dateLabel.Text = $"{now:dddd, d MMMM yyyy}  (W{wk})";
 
             if (weather is not null)
-                _weatherLabel.Text = $"Weather: {weather.TemperatureCelsius:F1}°C  {weather.Condition}";
+            {
+                var emoji = WeatherEmoji(weather.Condition);
+                _currentWeatherLabel.Text = $"{emoji} {weather.TemperatureCelsius:F1}\u00b0C  {weather.Condition}";
+
+                if (weather.Daily is { Count: > 0 })
+                {
+                    var today2 = DateOnly.FromDateTime(DateTimeOffset.Now.Date);
+                    var fcLines = weather.Daily
+                        .Where(f => f.Date > today2)
+                        .Take(4)
+                        .Select(fc =>
+                        {
+                            var e = fc.Condition is not null ? WeatherEmoji(fc.Condition) : " ";
+                            var temps = fc.HighCelsius.HasValue && fc.LowCelsius.HasValue
+                                ? $"{fc.HighCelsius.Value:F0}\u00b0/{fc.LowCelsius.Value:F0}\u00b0"
+                                : "";
+                            return $"{fc.Date:ddd d}: {e} {temps} {fc.Condition}";
+                        });
+                    _forecastLabel.Text = string.Join("\n", fcLines);
+                }
+                else
+                {
+                    _forecastLabel.Text = "";
+                }
+            }
             else
-                _weatherLabel.Text = "Weather: unavailable";
+            {
+                _currentWeatherLabel.Text = "unavailable";
+                _forecastLabel.Text = "";
+            }
 
             if (power is not null)
             {
@@ -255,4 +299,19 @@ internal sealed class DashboardTab : View
                 })));
         });
     }
+
+    // Only emoji verified in sandbox/emoji_test to have correct column alignment.
+    // Many emoji (VS16, some supplementary plane) cause Terminal.Gui width mismatches.
+    // See CLAUDE.md and sandbox/emoji_test/ for details.
+    private static string WeatherEmoji(string condition) => condition switch
+    {
+        "Clear" or "Mainly Clear" => "\U0001f31e",  // 🌞 sun face
+        "Partly Cloudy" => "\u26c5",                 // ⛅ partly cloudy
+        "Overcast" or "Fog" => "\u2601",             // ☁ cloud (no VS16!)
+        "Drizzle" or "Rain" or "Rain Showers" => "\U0001f4a7", // 💧 droplet
+        "Freezing Drizzle" or "Freezing Rain" => "\U0001f9ca", // 🧊 ice
+        "Snow" or "Snow Grains" or "Snow Showers" => "\u2744", // ❄ snowflake (no VS16!)
+        "Thunderstorm" or "Thunderstorm with Hail" => "\u26c8", // ⛈ thunder cloud
+        _ => "  ",
+    };
 }

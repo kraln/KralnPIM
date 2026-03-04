@@ -73,6 +73,11 @@ internal sealed class TuiApp : Window
                 App?.RequestStop();
                 e.Handled = true;
             }
+            else if (e == new Key('?') && !IsEditing())
+            {
+                ShowHelp();
+                e.Handled = true;
+            }
         };
 
         // Wire WebSocket events
@@ -175,6 +180,51 @@ internal sealed class TuiApp : Window
         {
             App?.Invoke(() => ShowError(ex.Message));
         }
+    }
+
+    private void ShowHelp()
+    {
+        var activeTab = _tabs.SelectedTab;
+        var tabName = activeTab?.DisplayText ?? "";
+
+        var help = tabName switch
+        {
+            "Calendar" => string.Join("\n", [
+                "Calendar Keys:",
+                "",
+                "  Up/Down     Move cursor through time",
+                "  Left/Right  Move between day columns",
+                "              (shifts window at edges)",
+                "  Page Up/Dn  Scroll by page",
+                "  T           Jump to current time",
+                "  N           New event at cursor time",
+                "  Enter       Edit event at cursor",
+                "  Q           Quit",
+                "  ?           This help"
+            ]),
+            "Email" => string.Join("\n", [
+                "Email Keys:",
+                "",
+                "  Up/Down     Navigate messages",
+                "  Enter       Open selected message",
+                "  C           Compose new email",
+                "  R           Reply to selected",
+                "  S           Search",
+                "  Q           Quit",
+                "  ?           This help"
+            ]),
+            _ => string.Join("\n", [
+                "Dashboard Keys:",
+                "",
+                "  Tab         Switch between tabs",
+                "  Up/Down     Navigate lists",
+                "  Q           Quit",
+                "  ?           This help"
+            ])
+        };
+
+        if (App is not null)
+            MessageBox.Query(App, "Help", help, ["OK"]);
     }
 
     private bool IsEditing()

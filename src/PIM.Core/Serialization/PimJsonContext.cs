@@ -25,6 +25,8 @@ namespace PIM.Core.Serialization;
 [JsonSerializable(typeof(SearchScope))]
 [JsonSerializable(typeof(PowerInfo))]
 [JsonSerializable(typeof(WeatherInfo))]
+[JsonSerializable(typeof(DailyForecast))]
+[JsonSerializable(typeof(List<DailyForecast>))]
 [JsonSerializable(typeof(ClockInfo))]
 [JsonSerializable(typeof(List<TimeZoneDisplay>))]
 public partial class PimJsonContext : JsonSerializerContext

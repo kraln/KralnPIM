@@ -11,7 +11,7 @@ public sealed class AccountStatusTracker
     public void MarkOffline(string accountId) => _status[accountId] = false;
 
     public bool IsOnline(string accountId) =>
-        _status.TryGetValue(accountId, out var online) && online;
+        !_status.TryGetValue(accountId, out var online) || online;
 
     public IReadOnlyDictionary<string, bool> GetAll() =>
         _status.ToDictionary(kv => kv.Key, kv => kv.Value);

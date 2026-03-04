@@ -7,9 +7,9 @@ public class AccountStatusTrackerTests
     private readonly AccountStatusTracker _tracker = new();
 
     [Fact]
-    public void UnknownAccount_IsNotOnline()
+    public void UnknownAccount_DefaultsToOnline()
     {
-        Assert.False(_tracker.IsOnline("nonexistent"));
+        Assert.True(_tracker.IsOnline("nonexistent"));
     }
 
     [Fact]

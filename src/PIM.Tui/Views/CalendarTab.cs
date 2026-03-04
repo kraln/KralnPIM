@@ -61,7 +61,7 @@ internal sealed class CalendarTab : View
             onWindowShift: shift =>
             {
                 _windowStart = _windowStart.AddDays(shift);
-                _ = RefreshTimelineAsync(CancellationToken.None);
+                _ = RefreshTimelineAndSunAsync(CancellationToken.None);
             },
             onEditEvent: evt =>
             {
@@ -72,6 +72,11 @@ internal sealed class CalendarTab : View
             {
                 if (_editorView is null)
                     OpenEditor(null, startTime);
+            },
+            onJumpToToday: () =>
+            {
+                _windowStart = DateTimeOffset.Now.Date;
+                _ = RefreshTimelineAndSunAsync(CancellationToken.None);
             });
 
         _timelineFrame.Add(_gridView);
@@ -91,17 +96,37 @@ internal sealed class CalendarTab : View
                 TryEditSelectedAgendaEvent();
                 e.Handled = true;
             }
+            else if (e == Key.CursorRight || e == Key.CursorLeft)
+            {
+                _gridView.SetFocus();
+                e.Handled = true;
+            }
         };
         _app.RegisterQuitKey(_agendaList);
 
-        Initialized += (_, _) => _ = RefreshAsync(CancellationToken.None);
+        Initialized += (_, _) => _ = InitialLoadAsync();
+    }
+
+    private async Task InitialLoadAsync()
+    {
+        await RefreshAsync(CancellationToken.None);
+        _app.App?.Invoke(() => _gridView.JumpToCurrentTime());
     }
 
     internal async Task RefreshAsync(CancellationToken ct)
     {
         await Task.WhenAll(
             RefreshAgendaAsync(ct),
-            RefreshTimelineAsync(ct));
+            RefreshTimelineAsync(ct),
+            RefreshSunTimesAsync(ct));
+    }
+
+    private async Task RefreshSunTimesAsync(CancellationToken ct)
+    {
+        var weather = await _app.SafeApiCallAsync(c => _api.GetWeatherAsync(c), ct);
+        if (weather is null) return;
+
+        _app.App?.Invoke(() => _gridView.SetDailyForecasts(weather.Daily ?? []));
     }
 
     private async Task RefreshAgendaAsync(CancellationToken ct)
@@ -125,6 +150,11 @@ internal sealed class CalendarTab : View
                     return $"{prefix}  {e.Summary}";
                 })));
         });
+    }
+
+    private async Task RefreshTimelineAndSunAsync(CancellationToken ct)
+    {
+        await Task.WhenAll(RefreshTimelineAsync(ct), RefreshSunTimesAsync(ct));
     }
 
     private async Task RefreshTimelineAsync(CancellationToken ct)
@@ -151,6 +181,10 @@ internal sealed class CalendarTab : View
 
     private void OpenEditor(CalendarEvent? existingEvent, DateTimeOffset? suggestedStart = null)
     {
+        // Show day context in the agenda pane
+        var eventDate = existingEvent?.Start.ToLocalTime().Date ?? suggestedStart?.Date ?? DateTime.Today;
+        ShowDayContext(eventDate);
+
         _editorView = new EventEditorView(_api, _app, existingEvent, onClose: () =>
         {
             _timelineFrame.Remove(_editorView!);
@@ -162,5 +196,24 @@ internal sealed class CalendarTab : View
         _gridView.Visible = false;
         _timelineFrame.Add(_editorView);
         _editorView.SetFocus();
+    }
+
+    private void ShowDayContext(DateTime date)
+    {
+        var dayEvents = _todayEvents
+            .Where(e => e.Start.ToLocalTime().Date == date)
+            .OrderBy(e => e.Start)
+            .ToList();
+
+        _agendaFrame.Title = $"{date:ddd MMM d}";
+        var lines = dayEvents.Count > 0
+            ? dayEvents.Select(e =>
+            {
+                var t = e.Start.ToLocalTime();
+                return $"{t:HH:mm}  {e.Summary}";
+            }).ToList()
+            : ["(no events)"];
+
+        _agendaList.SetSource(new ObservableCollection<string>(lines));
     }
 }
