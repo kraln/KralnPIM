@@ -1,3 +1,4 @@
+using PIM.Core;
 using PIM.Core.Config;
 using PIM.Core.Data;
 using PIM.Core.Providers;
@@ -103,8 +104,10 @@ public class ProviderRegistry
         ISyncStateRepository syncStateRepo,
         ILoggerFactory loggerFactory)
     {
+        var clientId = account.ClientId ?? DefaultCredentials.Google.ClientId;
+        var clientSecret = account.ClientSecret ?? DefaultCredentials.Google.ClientSecret;
         var credMgr = new GoogleCredentialManager(
-            account.Id, account.ClientId!, account.ClientSecret!,
+            account.Id, clientId, clientSecret,
             authRepo, loggerFactory.CreateLogger<GoogleCredentialManager>());
 
         var rateLimiter = new TokenBucketRateLimiter(250, 250);
@@ -126,8 +129,10 @@ public class ProviderRegistry
         ISyncStateRepository syncStateRepo,
         ILoggerFactory loggerFactory)
     {
+        var o365ClientId = account.ClientId ?? DefaultCredentials.Office365.ClientId;
+        var o365TenantId = account.TenantId ?? DefaultCredentials.Office365.TenantId;
         var graphAuth = new GraphAuthProvider(
-            account.Id, account.ClientId!, account.TenantId!,
+            account.Id, o365ClientId, o365TenantId,
             authRepo, loggerFactory.CreateLogger<GraphAuthProvider>());
 
         _mailProviders[account.Id] = new GraphMailProvider(

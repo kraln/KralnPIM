@@ -209,39 +209,27 @@ internal sealed partial class AccountWizardView : View
                 break;
 
             case AccountType.Google:
-                var gClientLabel = new Label { X = 2, Y = y, Text = "Client ID:" };
-                var gClientField = new TextField { X = 16, Y = y, Width = 45, Text = _clientId };
-                y += 2;
-                var gSecretLabel = new Label { X = 2, Y = y, Text = "Client Secret:" };
-                var gSecretField = new TextField { X = 16, Y = y, Width = 30, Text = _clientSecret };
-                Add(gClientLabel, gClientField, gSecretLabel, gSecretField);
+                var gNote = new Label { X = 2, Y = y, Width = Dim.Fill(2), Text = "Uses built-in Google OAuth credentials — no API registration needed." };
+                Add(gNote);
 
                 AddNavigationButtons(y + 2, () =>
                 {
                     _id = idField.Text;
                     _displayName = nameField.Text;
-                    _clientId = gClientField.Text;
-                    _clientSecret = gSecretField.Text;
                     return ValidateDetails();
-                }, [idField, nameField, gClientField, gSecretField]);
+                }, [idField, nameField]);
                 break;
 
             case AccountType.Office365:
-                var tenantLabel = new Label { X = 2, Y = y, Text = "Tenant ID:" };
-                var tenantField = new TextField { X = 16, Y = y, Width = 40, Text = _tenantId };
-                y += 2;
-                var o365ClientLabel = new Label { X = 2, Y = y, Text = "Client ID:" };
-                var o365ClientField = new TextField { X = 16, Y = y, Width = 40, Text = _clientId };
-                Add(tenantLabel, tenantField, o365ClientLabel, o365ClientField);
+                var o365Note = new Label { X = 2, Y = y, Width = Dim.Fill(2), Text = "Uses built-in O365 OAuth credentials — no API registration needed." };
+                Add(o365Note);
 
                 AddNavigationButtons(y + 2, () =>
                 {
                     _id = idField.Text;
                     _displayName = nameField.Text;
-                    _tenantId = tenantField.Text;
-                    _clientId = o365ClientField.Text;
                     return ValidateDetails();
-                }, [idField, nameField, tenantField, o365ClientField]);
+                }, [idField, nameField]);
                 break;
 
             case AccountType.CalDav:
@@ -467,16 +455,20 @@ internal sealed partial class AccountWizardView : View
 
                         case AccountType.Google:
                             AppendStatus("[ ] Starting Google OAuth...");
+                            var gCid = string.IsNullOrWhiteSpace(_clientId) ? PIM.Core.DefaultCredentials.Google.ClientId : _clientId;
+                            var gSec = string.IsNullOrWhiteSpace(_clientSecret) ? PIM.Core.DefaultCredentials.Google.ClientSecret : _clientSecret;
                             var googleOk = await GoogleAuthFlow.AuthorizeAsync(
-                                _clientId, _clientSecret, _id,
+                                gCid, gSec, _id,
                                 _app.AuthRepo, AppendStatus, CancellationToken.None);
                             AppendStatus(googleOk ? "[OK] Google token acquired" : "[FAIL] Google auth failed");
                             break;
 
                         case AccountType.Office365:
                             AppendStatus("[ ] Starting O365 device code flow...");
+                            var oCid = string.IsNullOrWhiteSpace(_clientId) ? PIM.Core.DefaultCredentials.Office365.ClientId : _clientId;
+                            var oTid = string.IsNullOrWhiteSpace(_tenantId) ? PIM.Core.DefaultCredentials.Office365.TenantId : _tenantId;
                             var graphOk = await GraphAuthFlow.AuthorizeAsync(
-                                _clientId, _tenantId, _id,
+                                oCid, oTid, _id,
                                 _app.AuthRepo, AppendStatus, CancellationToken.None);
                             AppendStatus(graphOk ? "[OK] O365 token acquired" : "[FAIL] O365 auth failed");
                             break;
@@ -582,13 +574,9 @@ internal sealed partial class AccountWizardView : View
                 break;
 
             case AccountType.Google:
-                if (string.IsNullOrWhiteSpace(_clientId)) { _app.ShowError("Client ID is required."); return false; }
-                if (string.IsNullOrWhiteSpace(_clientSecret)) { _app.ShowError("Client Secret is required."); return false; }
                 break;
 
             case AccountType.Office365:
-                if (string.IsNullOrWhiteSpace(_tenantId)) { _app.ShowError("Tenant ID is required."); return false; }
-                if (string.IsNullOrWhiteSpace(_clientId)) { _app.ShowError("Client ID is required."); return false; }
                 break;
 
             case AccountType.CalDav:
@@ -611,9 +599,9 @@ internal sealed partial class AccountWizardView : View
             SmtpHost: _accountType == AccountType.Imap ? _smtpHost : null,
             SmtpPort: _accountType == AccountType.Imap ? _smtpPort : null,
             Username: _accountType is AccountType.Imap or AccountType.CalDav ? _username : null,
-            ClientId: _accountType is AccountType.Google or AccountType.Office365 ? _clientId : null,
-            ClientSecret: _accountType == AccountType.Google ? _clientSecret : null,
-            TenantId: _accountType == AccountType.Office365 ? _tenantId : null,
+            ClientId: null,
+            ClientSecret: null,
+            TenantId: null,
             Calendars: _accountType == AccountType.CalDav ? _calendars.ToList() : null,
             IgnoreSslErrors: _ignoreSslErrors ? true : null
         );

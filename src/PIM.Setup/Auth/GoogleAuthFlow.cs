@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Web;
 using Google.Apis.Auth.OAuth2;
 using Google.Apis.Auth.OAuth2.Flows;
 using Google.Apis.Auth.OAuth2.Responses;
@@ -47,25 +48,30 @@ internal static class GoogleAuthFlow
             return true;
         }
 
-        // Allocate a random loopback port for the OAuth callback
-        var port = GetAvailablePort();
+        // Start listener BEFORE opening browser so callback port is ready
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
         var redirectUri = $"http://127.0.0.1:{port}/";
+        onStatus($"Listening on port {port} for OAuth callback...");
 
-        var authUrl = flow.CreateAuthorizationCodeRequest(redirectUri).Build().ToString();
-        onStatus($"Open this URL to authorize:\n{authUrl}");
+        var request = flow.CreateAuthorizationCodeRequest(redirectUri);
+        request.Scope = string.Join(" ", Scopes);
+        var authUrl = request.Build().ToString();
 
-        // Launch the browser
-        try
+        if (TryOpenBrowser(authUrl))
         {
-            Process.Start(new ProcessStartInfo(authUrl) { UseShellExecute = true });
+            onStatus("Browser opened — authorize the app, then return here.");
         }
-        catch
+        else
         {
-            // Browser launch may fail in headless environments; URL was already reported via onStatus
+            TryCopyToClipboard(authUrl);
+            onStatus($"Open this URL to authorize:\n{authUrl}");
         }
 
         // Wait for the OAuth callback
-        var code = await ListenForAuthCodeAsync(redirectUri, ct);
+        var code = await WaitForAuthCodeAsync(listener, ct);
+        onStatus("Authorization code received, exchanging for token...");
 
         var tokenResponse = await flow.ExchangeCodeForTokenAsync(accountId, code, redirectUri, ct);
 
@@ -80,33 +86,82 @@ internal static class GoogleAuthFlow
         return true;
     }
 
-    private static async Task<string> ListenForAuthCodeAsync(string redirectUri, CancellationToken ct)
+    private static async Task<string> WaitForAuthCodeAsync(TcpListener listener, CancellationToken ct)
     {
-        using var listener = new HttpListener();
-        listener.Prefixes.Add(redirectUri);
-        listener.Start();
+        using var client = await listener.AcceptTcpClientAsync(ct);
+        await using var stream = client.GetStream();
 
-        var context = await listener.GetContextAsync().WaitAsync(ct);
-        var code = context.Request.QueryString["code"]
+        // Read the HTTP request
+        var buffer = new byte[4096];
+        var bytesRead = await stream.ReadAsync(buffer, ct);
+        var requestText = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+
+        // Parse "GET /?code=...&scope=... HTTP/1.1"
+        var firstLine = requestText.Split('\n')[0];
+        var path = firstLine.Split(' ')[1]; // "/?code=...&scope=..."
+        var query = HttpUtility.ParseQueryString(path.Contains('?') ? path[(path.IndexOf('?') + 1)..] : "");
+        var code = query["code"]
             ?? throw new InvalidOperationException("No authorization code received from Google.");
 
-        var responseBytes = Encoding.UTF8.GetBytes(
-            "<html><body><h1>Authorization successful!</h1><p>You can close this window.</p></body></html>");
-        context.Response.ContentType = "text/html";
-        context.Response.ContentLength64 = responseBytes.Length;
-        await context.Response.OutputStream.WriteAsync(responseBytes, ct);
-        context.Response.Close();
+        // Send success response
+        const string body = "<html><body><h1>Authorization successful!</h1><p>You can close this window.</p></body></html>";
+        var response = $"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {body.Length}\r\nConnection: close\r\n\r\n{body}";
+        var responseBytes = Encoding.UTF8.GetBytes(response);
+        await stream.WriteAsync(responseBytes, ct);
 
         return code;
     }
 
-    private static int GetAvailablePort()
+    private static bool TryOpenBrowser(string url)
     {
-        using var listener = new TcpListener(IPAddress.Loopback, 0);
-        listener.Start();
-        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
-        listener.Stop();
-        return port;
+        try
+        {
+            var psi = new ProcessStartInfo("xdg-open", url)
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            };
+            var proc = Process.Start(psi);
+            return proc is not null;
+        }
+        catch
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+    }
+
+    private static void TryCopyToClipboard(string text)
+    {
+        foreach (var (cmd, args) in new[] { ("wl-copy", text), ("xclip", "-selection clipboard") })
+        {
+            try
+            {
+                var psi = new ProcessStartInfo(cmd, args)
+                {
+                    RedirectStandardInput = cmd == "xclip",
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                };
+                var proc = Process.Start(psi);
+                if (proc is null) continue;
+                if (cmd == "xclip")
+                {
+                    proc.StandardInput.Write(text);
+                    proc.StandardInput.Close();
+                }
+                proc.WaitForExit(2000);
+                return;
+            }
+            catch { /* try next */ }
+        }
     }
 }
 

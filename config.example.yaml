@@ -12,15 +12,13 @@ accounts:
   - id: "work-google"
     type: google
     display_name: "Work (Google)"
-    client_id: "xxx.apps.googleusercontent.com"
-    client_secret: "GOCSPX-xxx"
+    # Uses built-in OAuth credentials — no client_id/client_secret needed
     calendars: []
 
   - id: "work-o365"
     type: office365
     display_name: "Work (O365)"
-    tenant_id: "xxxx-xxxx"
-    client_id: "xxxx-xxxx"
+    # Uses built-in OAuth credentials — no client_id/tenant_id needed
     calendars: []
 
   - id: "my-radicale"

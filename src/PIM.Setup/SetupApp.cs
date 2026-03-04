@@ -30,19 +30,7 @@ internal sealed class SetupApp : Window
         _loggerFactory = loggerFactory;
         Title = "KralnPIM Setup (Esc to go back)";
 
-        PimConfig? loaded = null;
-        try
-        {
-            loaded = ConfigSerializer.LoadOrDefault(configPath);
-        }
-        catch (ConfigValidationException ex)
-        {
-            // Will be handled after UI init
-            loaded = ConfigSerializer.CreateDefault();
-            _ = ex; // Show error after init
-        }
-
-        Config = loaded;
+        Config = ConfigSerializer.LoadOrDefault(configPath);
 
         _statusLabel = new Label
         {

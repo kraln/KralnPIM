@@ -29,7 +29,7 @@ internal sealed class AccountListView : View
         var header = new Label
         {
             X = 2, Y = 0,
-            Text = "Accounts                                     [A]dd  [Esc] Back"
+            Text = "Accounts                              [A]dd  [R]e-auth  [Esc] Back"
         };
 
         var columnHeader = new Label
@@ -55,7 +55,7 @@ internal sealed class AccountListView : View
         var footer = new Label
         {
             X = 2, Y = Pos.AnchorEnd(2),
-            Text = "[E]dit  [T]est  [D]elete selected account"
+            Text = "[E]dit  [R]e-auth  [T]est  [D]elete selected account"
         };
 
         // Disable type-ahead search so letter keys (A/E/T/D) reach our KeyDown handler
@@ -76,6 +76,11 @@ internal sealed class AccountListView : View
             else if (e == Key.E)
             {
                 EditSelected();
+                e.Handled = true;
+            }
+            else if (e == Key.R)
+            {
+                AuthenticateSelected();
                 e.Handled = true;
             }
             else if (e == Key.T)
@@ -124,6 +129,16 @@ internal sealed class AccountListView : View
 
         var account = _app.Config.Accounts[idx];
         _app.ShowView(new AccountWizardView(_app, account));
+    }
+
+    private void AuthenticateSelected()
+    {
+        var idx = _list.SelectedItem ?? -1;
+        if (idx < 0 || idx >= _app.Config.Accounts.Count)
+            return;
+
+        var account = _app.Config.Accounts[idx];
+        _app.ShowView(new AuthenticateView(_app, account));
     }
 
     private void TestSelected()

@@ -7,6 +7,7 @@ using MailKit.Net.Imap;
 using MailKit.Net.Smtp;
 using MailKit.Security;
 using Microsoft.Identity.Client;
+using PIM.Core;
 using PIM.Core.Config;
 using PIM.Core.Data;
 using PIM.Setup.Auth;
@@ -194,18 +195,15 @@ internal sealed class ConnectionTestView : View
             return;
         }
 
-        if (string.IsNullOrEmpty(account.ClientId) || string.IsNullOrEmpty(account.ClientSecret))
-        {
-            AppendLine("  Google: Client ID/Secret not configured.");
-            return;
-        }
+        var gCid = account.ClientId ?? DefaultCredentials.Google.ClientId;
+        var gSec = account.ClientSecret ?? DefaultCredentials.Google.ClientSecret;
 
         var flow = new GoogleAuthorizationCodeFlow(new GoogleAuthorizationCodeFlow.Initializer
         {
             ClientSecrets = new ClientSecrets
             {
-                ClientId = account.ClientId,
-                ClientSecret = account.ClientSecret,
+                ClientId = gCid,
+                ClientSecret = gSec,
             },
             Scopes = ["https://www.googleapis.com/auth/gmail.modify"],
             DataStore = new AuthRepositoryDataStore(_app.AuthRepo, account.Id),
@@ -254,15 +252,12 @@ internal sealed class ConnectionTestView : View
             return;
         }
 
-        if (string.IsNullOrEmpty(account.ClientId) || string.IsNullOrEmpty(account.TenantId))
-        {
-            AppendLine("  O365: Client ID/Tenant ID not configured.");
-            return;
-        }
+        var oCid = account.ClientId ?? DefaultCredentials.Office365.ClientId;
+        var oTid = account.TenantId ?? DefaultCredentials.Office365.TenantId;
 
         var app = PublicClientApplicationBuilder
-            .Create(account.ClientId)
-            .WithAuthority($"https://login.microsoftonline.com/{account.TenantId}")
+            .Create(oCid)
+            .WithAuthority($"https://login.microsoftonline.com/{oTid}")
             .Build();
 
         // Deserialize MSAL cache

@@ -13,6 +13,19 @@ public static class ConfigLoader
 
     public static PimConfig LoadFromString(string yaml)
     {
+        var config = DeserializeConfig(yaml);
+        Validate(config);
+        return config;
+    }
+
+    public static PimConfig LoadWithoutValidation(string yamlPath)
+    {
+        var yaml = File.ReadAllText(yamlPath);
+        return DeserializeConfig(yaml);
+    }
+
+    private static PimConfig DeserializeConfig(string yaml)
+    {
         var deserializer = new DeserializerBuilder()
             .WithNamingConvention(UnderscoredNamingConvention.Instance)
             .IgnoreUnmatchedProperties()
@@ -21,9 +34,7 @@ public static class ConfigLoader
         var dto = deserializer.Deserialize<PimConfigDto>(yaml)
             ?? throw new ConfigValidationException(["Configuration file is empty or invalid."]);
 
-        var config = MapToConfig(dto);
-        Validate(config);
-        return config;
+        return MapToConfig(dto);
     }
 
     private static PimConfig MapToConfig(PimConfigDto dto)
@@ -138,17 +149,11 @@ public static class ConfigLoader
                     break;
 
                 case AccountType.Google:
-                    if (string.IsNullOrWhiteSpace(account.ClientId))
-                        errors.Add($"Account '{account.Id}': 'client_id' is required for Google accounts.");
-                    if (string.IsNullOrWhiteSpace(account.ClientSecret))
-                        errors.Add($"Account '{account.Id}': 'client_secret' is required for Google accounts.");
+                    // client_id/client_secret optional — embedded defaults in DefaultCredentials
                     break;
 
                 case AccountType.Office365:
-                    if (string.IsNullOrWhiteSpace(account.TenantId))
-                        errors.Add($"Account '{account.Id}': 'tenant_id' is required for Office365 accounts.");
-                    if (string.IsNullOrWhiteSpace(account.ClientId))
-                        errors.Add($"Account '{account.Id}': 'client_id' is required for Office365 accounts.");
+                    // client_id/tenant_id optional — embedded defaults in DefaultCredentials
                     break;
 
                 case AccountType.CalDav:

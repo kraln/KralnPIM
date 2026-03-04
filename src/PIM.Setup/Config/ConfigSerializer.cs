@@ -8,8 +8,25 @@ public static class ConfigSerializer
 {
     public static PimConfig Load(string path) => ConfigLoader.Load(path);
 
-    public static PimConfig LoadOrDefault(string path) =>
-        File.Exists(path) ? ConfigLoader.Load(path) : CreateDefault();
+    /// <summary>
+    /// Load config, falling back to loading without validation if validation fails.
+    /// PIM.Setup is a config editor — it must load broken configs so users can fix them.
+    /// </summary>
+    public static PimConfig LoadOrDefault(string path)
+    {
+        if (!File.Exists(path))
+            return CreateDefault();
+
+        try
+        {
+            return ConfigLoader.Load(path);
+        }
+        catch (ConfigValidationException)
+        {
+            // Load without validation so the user can fix issues in the editor
+            return ConfigLoader.LoadWithoutValidation(path);
+        }
+    }
 
     public static PimConfig CreateDefault() => new(
         Accounts: [],
