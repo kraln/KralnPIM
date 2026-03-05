@@ -62,13 +62,43 @@ internal sealed class TuiApp : Window
 
         Add(_tabs, _statusLabel);
 
+        // Make the TabRow (tab strip header) non-focusable so Terminal.Gui's OnSubViewLayout
+        // can never move focus there. Tab switching is handled via Ctrl+1/2/3 or Ctrl+Left/Right.
+        var tabRow = _tabs.SubViews.FirstOrDefault(v => v.GetType().Name == "TabRow");
+        if (tabRow is not null)
+            tabRow.CanFocus = false;
+
         // Remove the default Window Esc → QuitToplevel binding
         KeyBindings.Remove(Key.Esc);
 
         // Global keybindings (fires when no child view handles the key)
         KeyDown += (_, e) =>
         {
-            if (e == Key.Q && !IsEditing())
+            if ((e == Key.CursorLeft.WithCtrl || e == Key.CursorRight.WithCtrl) && !IsEditing())
+            {
+                var tabs = _tabs.Tabs.ToList();
+                var curIdx = tabs.IndexOf(_tabs.SelectedTab!);
+                var newIdx = e == Key.CursorLeft.WithCtrl
+                    ? (curIdx - 1 + tabs.Count) % tabs.Count
+                    : (curIdx + 1) % tabs.Count;
+                _tabs.SelectedTab = tabs[newIdx];
+                tabs[newIdx].View?.SetFocus();
+                e.Handled = true;
+            }
+            else if (!IsEditing() &&
+                     (e == new Key('1').WithCtrl || e == new Key('2').WithCtrl || e == new Key('3').WithCtrl))
+            {
+                var idx = e == new Key('1').WithCtrl ? 0
+                    : e == new Key('2').WithCtrl ? 1 : 2;
+                var tabs = _tabs.Tabs.ToList();
+                if (idx < tabs.Count)
+                {
+                    _tabs.SelectedTab = tabs[idx];
+                    tabs[idx].View?.SetFocus();
+                }
+                e.Handled = true;
+            }
+            else if (e == Key.Q && !IsEditing())
             {
                 App?.RequestStop();
                 e.Handled = true;
@@ -192,6 +222,7 @@ internal sealed class TuiApp : Window
             "Calendar" => string.Join("\n", [
                 "Calendar Keys:",
                 "",
+                "  Ctrl+1/2/3  Switch tabs",
                 "  Up/Down     Move cursor through time",
                 "  Left/Right  Move between day columns",
                 "              (shifts window at edges)",
@@ -205,10 +236,17 @@ internal sealed class TuiApp : Window
             "Email" => string.Join("\n", [
                 "Email Keys:",
                 "",
+                "  Ctrl+1/2/3  Switch tabs",
                 "  Up/Down     Navigate messages",
-                "  Enter       Open selected message",
-                "  C           Compose new email",
+                "  Tab         Switch to reader (scroll)",
+                "  Esc         Back to inbox list",
+                "  N           Compose new email",
                 "  R           Reply to selected",
+                "  U           Filter unread",
+                "  F           Filter flagged",
+                "  Space       Toggle read/unread",
+                "  !           Toggle flag",
+                "  D           Download attachment",
                 "  /           Search",
                 "  Q           Quit",
                 "  ?           This help"
@@ -216,7 +254,7 @@ internal sealed class TuiApp : Window
             _ => string.Join("\n", [
                 "Dashboard Keys:",
                 "",
-                "  Tab         Switch between tabs",
+                "  Ctrl+1/2/3  Switch tabs",
                 "  Up/Down     Navigate lists",
                 "  Q           Quit",
                 "  ?           This help"

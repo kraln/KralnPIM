@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using PIM.Core.Models;
 using PIM.Tui.Client;
 using PIM.Tui.Models;
@@ -26,6 +27,7 @@ internal sealed class EmailTab : View
     private readonly ListView _attachmentList;
 
     private List<EmailHeader> _emails = [];
+    private ObservableCollection<string> _inboxSource = [];
     private EmailHeader? _selectedEmail;
     private MailDetail? _currentDetail;
     private ComposeView? _composeView;
@@ -33,6 +35,7 @@ internal sealed class EmailTab : View
     private bool? _filterUnread;
     private bool? _filterFlagged;
     private int _offset;
+    private bool _staleInbox;
     private const int PageSize = 50;
 
     public EmailTab(PimApiClient api, TuiApp app)
@@ -91,7 +94,8 @@ internal sealed class EmailTab : View
             X = Pos.Right(_inboxFrame),
             Y = 0,
             Width = Dim.Fill(),
-            Height = Dim.Fill()
+            Height = Dim.Fill(),
+            CanFocus = false
         };
 
         _readerFromLabel = new Label { X = 0, Y = 0, Width = Dim.Fill(), Text = "" };
@@ -104,7 +108,20 @@ internal sealed class EmailTab : View
             X = 0, Y = 5,
             Width = Dim.Fill(),
             Height = Dim.Fill(3),
-            ReadOnly = true
+            ReadOnly = true,
+            WordWrap = true,
+            CanFocus = false
+        };
+
+        _readerBody.KeyDown += (_, e) =>
+        {
+            if (e == Key.Esc)
+            {
+                _readerBody.CanFocus = false;
+                _readerFrame.CanFocus = false;
+                _inboxList.SetFocus();
+                e.Handled = true;
+            }
         };
 
         _attachmentList = new ListView
@@ -113,7 +130,31 @@ internal sealed class EmailTab : View
             Y = Pos.AnchorEnd(3),
             Width = Dim.Fill(),
             Height = 3,
-            Visible = false
+            Visible = false,
+            CanFocus = false
+        };
+
+        _attachmentList.KeyDown += (_, e) =>
+        {
+            if (e == Key.Esc)
+            {
+                _attachmentList.CanFocus = false;
+                _readerFrame.CanFocus = false;
+                _inboxList.SetFocus();
+                e.Handled = true;
+            }
+        };
+
+        _attachmentList.Accepting += (_, e) =>
+        {
+            if (_selectedEmail is null) return;
+            var idx = _attachmentList.SelectedItem ?? -1;
+            if (idx >= 0 && idx < _selectedEmail.Attachments.Count)
+            {
+                _ = DownloadAttachmentAsync(_selectedEmail.MessageId,
+                    _selectedEmail.Attachments[idx].Filename);
+                e.Handled = true;
+            }
         };
 
         _readerFrame.Add(_readerFromLabel, _readerToLabel, _readerDateLabel,
@@ -121,21 +162,107 @@ internal sealed class EmailTab : View
 
         Add(_inboxFrame, _readerFrame);
 
+        // Intercept Tab/Shift+Tab at the EmailTab level to prevent focus escaping to TabView.
+        // Reader views are CanFocus=false by default to prevent focus stealing during async updates.
+        // Tab explicitly enables focus before switching; Esc disables it when leaving.
+        KeyDown += (_, e) =>
+        {
+            if (_composeView is not null) return; // Let compose handle its own focus
+
+            if (e == Key.Tab)
+            {
+                if (_inboxList.HasFocus)
+                {
+                    if (_currentDetail is not null)
+                    {
+                        _readerFrame.CanFocus = true;
+                        _readerBody.CanFocus = true;
+                        _readerBody.SetFocus();
+                    }
+                }
+                else if (_readerBody.HasFocus)
+                {
+                    _readerBody.CanFocus = false;
+                    if (_attachmentList.Visible)
+                    {
+                        _attachmentList.CanFocus = true;
+                        _attachmentList.SetFocus();
+                    }
+                    else
+                    {
+                        _readerFrame.CanFocus = false;
+                        _inboxList.SetFocus();
+                    }
+                }
+                else
+                {
+                    _attachmentList.CanFocus = false;
+                    _readerFrame.CanFocus = false;
+                    _inboxList.SetFocus();
+                }
+                e.Handled = true;
+            }
+            else if (e == Key.Tab.WithShift)
+            {
+                if (_attachmentList.HasFocus)
+                {
+                    _attachmentList.CanFocus = false;
+                    _readerBody.CanFocus = true;
+                    _readerBody.SetFocus();
+                }
+                else if (_readerBody.HasFocus)
+                {
+                    _readerBody.CanFocus = false;
+                    _readerFrame.CanFocus = false;
+                    _inboxList.SetFocus();
+                }
+                else
+                {
+                    _inboxList.SetFocus();
+                }
+                e.Handled = true;
+            }
+        };
+
+        // Refresh stale data when inbox regains focus
+        _inboxList.HasFocusChanged += (_, e) =>
+        {
+            if (e.NewValue && _staleInbox)
+                _ = RefreshInboxAsync(CancellationToken.None, force: true);
+        };
+
         // Key handlers go on _inboxList (the focused control) so they fire before ListView's type-ahead search
         _inboxList.KeyDown += (_, e) =>
         {
-            if (e == Key.U)
+            // Prevent Left/Right from propagating to TabView (which would switch tabs)
+            if (e == Key.CursorLeft || e == Key.CursorRight)
+            {
+                e.Handled = true;
+            }
+            else if (e == Key.U)
             {
                 _filterUnread = _filterUnread is null ? false : null;
                 _offset = 0;
-                _ = RefreshInboxAsync(CancellationToken.None);
+                _ = RefreshInboxAsync(CancellationToken.None, force: true);
                 e.Handled = true;
             }
             else if (e == Key.F)
             {
                 _filterFlagged = _filterFlagged is null ? true : null;
                 _offset = 0;
-                _ = RefreshInboxAsync(CancellationToken.None);
+                _ = RefreshInboxAsync(CancellationToken.None, force: true);
+                e.Handled = true;
+            }
+            else if (e == Key.Space)
+            {
+                if (_selectedEmail is not null)
+                    _ = ToggleReadAsync(_selectedEmail);
+                e.Handled = true;
+            }
+            else if (e == new Key('!'))
+            {
+                if (_selectedEmail is not null)
+                    _ = ToggleFlagAsync(_selectedEmail);
                 e.Handled = true;
             }
             else if (e == new Key('/'))
@@ -175,24 +302,31 @@ internal sealed class EmailTab : View
             else if (e == Key.PageDown)
             {
                 _offset += PageSize;
-                _ = RefreshInboxAsync(CancellationToken.None);
+                _ = RefreshInboxAsync(CancellationToken.None, force: true);
                 e.Handled = true;
             }
             else if (e == Key.PageUp)
             {
                 _offset = Math.Max(0, _offset - PageSize);
-                _ = RefreshInboxAsync(CancellationToken.None);
+                _ = RefreshInboxAsync(CancellationToken.None, force: true);
                 e.Handled = true;
             }
         };
         _app.RegisterQuitKey(_inboxList);
 
         // Load initial data when tab becomes visible
-        Initialized += (_, _) => _ = RefreshInboxAsync(CancellationToken.None);
+        Initialized += (_, _) => _ = RefreshInboxAsync(CancellationToken.None, force: true);
     }
 
-    internal async Task RefreshInboxAsync(CancellationToken ct)
+    internal async Task RefreshInboxAsync(CancellationToken ct, bool force = false)
     {
+        // Skip background refreshes while user is actively browsing the inbox
+        if (!force && _inboxList.HasFocus)
+        {
+            _staleInbox = true;
+            return;
+        }
+
         var emails = await _app.SafeApiCallAsync(
             c => _api.ListMailAsync(isRead: _filterUnread, isFlagged: _filterFlagged,
                 offset: _offset, limit: PageSize, ct: c), ct);
@@ -200,6 +334,7 @@ internal sealed class EmailTab : View
         if (emails is null) return;
 
         _emails = emails;
+        _staleInbox = false;
         _app.App?.Invoke(() =>
         {
             var filterHints = new List<string>();
@@ -209,16 +344,16 @@ internal sealed class EmailTab : View
                 ? $"Inbox ({string.Join(", ", filterHints)})"
                 : "Inbox";
 
-            _inboxList.SetSource(new ObservableCollection<string>(_emails
-                .Select(m =>
-                {
-                    var indicator = m.IsRead ? " " : "*";
-                    var flag = m.IsFlagged ? " [F]" : "";
-                    var date = m.Date.ToLocalTime().ToString("MMM d");
-                    var subject = Truncate(m.Subject ?? "(no subject)", 25);
-                    var from = Truncate(m.FromDisplayName ?? m.FromAddress, 15);
-                    return $"{indicator} {subject}{flag}  {from}  {date}";
-                })));
+            var selectedIdx = _inboxList.SelectedItem ?? -1;
+
+            _inboxSource = new ObservableCollection<string>(
+                _emails.Select(FormatEmailLine));
+            _inboxList.SetSource(_inboxSource);
+
+            if (selectedIdx >= 0 && selectedIdx < _emails.Count)
+                _inboxList.SelectedItem = selectedIdx;
+
+            DeferFocusToInbox();
         });
     }
 
@@ -235,6 +370,11 @@ internal sealed class EmailTab : View
 
         _app.App?.Invoke(() =>
         {
+            // Ensure reader pane can't steal focus during updates
+            _readerFrame.CanFocus = false;
+            _readerBody.CanFocus = false;
+            _attachmentList.CanFocus = false;
+
             _readerFromLabel.Text = $"From: {detail.Header.FromDisplayName} <{detail.Header.FromAddress}>";
             _readerToLabel.Text = $"To: {string.Join(", ", detail.Header.ToAddresses)}";
             _readerDateLabel.Text = $"Date: {detail.Header.Date.ToLocalTime():ddd, d MMM yyyy h:mm tt}";
@@ -252,14 +392,67 @@ internal sealed class EmailTab : View
             {
                 _attachmentList.Visible = false;
             }
+
+            DeferFocusToInbox();
         });
 
-        // Auto mark-as-read
+        // Auto mark-as-read — update local state first to avoid SetSource() from WebSocket sync
         if (!header.IsRead)
         {
+            var idx = _emails.IndexOf(header);
+            if (idx >= 0)
+            {
+                _emails[idx] = header with { IsRead = true };
+                _selectedEmail = _emails[idx];
+            }
+            _app.App?.Invoke(() => { RefreshInboxListDisplayInPlace(); DeferFocusToInbox(); });
             await _app.SafeApiCallAsync(
                 c => _api.SetMailFlagsAsync(header.MessageId, new MailFlagPatch(true, null), c));
         }
+    }
+
+    private async Task ToggleReadAsync(EmailHeader header)
+    {
+        var newRead = !header.IsRead;
+        await _app.SafeApiCallAsync(
+            c => _api.SetMailFlagsAsync(header.MessageId, new MailFlagPatch(newRead, null), c));
+
+        // Update local state and refresh in-place (no SetSource)
+        var idx = _emails.IndexOf(header);
+        if (idx >= 0)
+        {
+            _emails[idx] = header with { IsRead = newRead };
+            _selectedEmail = _emails[idx];
+            _app.App?.Invoke(() => { RefreshInboxListDisplayInPlace(); DeferFocusToInbox(); });
+        }
+
+        _app.ShowStatus(newRead ? "Marked as read" : "Marked as unread");
+    }
+
+    private async Task ToggleFlagAsync(EmailHeader header)
+    {
+        var newFlagged = !header.IsFlagged;
+        await _app.SafeApiCallAsync(
+            c => _api.SetMailFlagsAsync(header.MessageId, new MailFlagPatch(null, newFlagged), c));
+
+        var idx = _emails.IndexOf(header);
+        if (idx >= 0)
+        {
+            _emails[idx] = header with { IsFlagged = newFlagged };
+            _selectedEmail = _emails[idx];
+            _app.App?.Invoke(() => { RefreshInboxListDisplayInPlace(); DeferFocusToInbox(); });
+        }
+
+        _app.ShowStatus(newFlagged ? "Flagged" : "Unflagged");
+    }
+
+    /// <summary>Updates the display text for changed items without replacing the source.</summary>
+    private void RefreshInboxListDisplayInPlace()
+    {
+        if (_inboxSource.Count != _emails.Count) return;
+        for (var i = 0; i < _emails.Count; i++)
+            _inboxSource[i] = FormatEmailLine(_emails[i]);
+        _inboxList.SetNeedsDraw();
     }
 
     private async Task SearchAsync(string query)
@@ -273,12 +466,10 @@ internal sealed class EmailTab : View
         _app.App?.Invoke(() =>
         {
             _inboxFrame.Title = $"Search: {query}";
-            _inboxList.SetSource(new ObservableCollection<string>(_emails
-                .Select(m =>
-                {
-                    var indicator = m.IsRead ? " " : "*";
-                    return $"{indicator} {Truncate(m.Subject ?? "(no subject)", 25)}  {Truncate(m.FromDisplayName ?? m.FromAddress, 15)}";
-                })));
+            _inboxSource = new ObservableCollection<string>(
+                _emails.Select(FormatEmailLine));
+            _inboxList.SetSource(_inboxSource);
+            DeferFocusToInbox();
         });
     }
 
@@ -315,14 +506,53 @@ internal sealed class EmailTab : View
         var result = await _app.SafeApiCallAsync(
             c => _api.DownloadAttachmentAsync(messageId, filename, c));
 
-        if (result is not null)
-            _app.ShowStatus($"Downloaded: {result.FilePath}");
+        if (result is null) return;
+
+        var filePath = result.FilePath.Replace("~",
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
+
+        if (!File.Exists(filePath))
+        {
+            _app.ShowError($"File not found: {filePath}");
+            return;
+        }
+
+        _app.ShowStatus($"Opening: {filePath}");
+
+        try
+        {
+            Process.Start(new ProcessStartInfo(filePath) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            _app.ShowError($"Could not open file: {ex.Message}");
+        }
     }
 
     internal void UpdateAccountStatus(string accountId, bool online)
     {
         _ = RefreshInboxAsync(CancellationToken.None);
     }
+
+    private static string FormatEmailLine(EmailHeader m)
+    {
+        var unread = m.IsRead ? "\u25cb" : "\u25cf";
+        var extra = (m.IsFlagged, m.Attachments.Count > 0) switch
+        {
+            (true, true) => "\u2347",
+            (true, false) => "\u2691",
+            (false, true) => "\u235e",
+            _ => " "
+        };
+        var date = m.Date.ToLocalTime().ToString("MMM d");
+        var subject = Truncate(m.Subject ?? "(no subject)", 25);
+        var from = Truncate(m.FromDisplayName ?? m.FromAddress, 15);
+        return $"{unread}{extra} {subject}  {from}  {date}";
+    }
+
+    /// <summary>Defers SetFocus to the next main loop iteration.</summary>
+    private void DeferFocusToInbox() =>
+        _app.App?.Invoke(() => _inboxList.SetFocus());
 
     private static string Truncate(string value, int maxLength) =>
         value.Length <= maxLength ? value : value[..(maxLength - 3)] + "...";

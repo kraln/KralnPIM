@@ -142,8 +142,10 @@ internal static class MailEndpoints
                 return Results.Json(new ErrorResponse("Provider not found."),
                     ServerJsonContext.Default.ErrorResponse, statusCode: 404);
 
+            var downloadDir = config.Storage.AttachmentDownloadDir.Replace("~",
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
             var filePath = await provider.DownloadAttachmentAsync(
-                messageId, filename, config.Storage.AttachmentDownloadDir, ct);
+                messageId, filename, downloadDir, ct);
             return Results.Ok(new { filePath });
         });
     }
