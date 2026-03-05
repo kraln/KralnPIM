@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Web;
 using Google.Apis.Auth.OAuth2;
@@ -27,6 +28,7 @@ internal static class GoogleAuthFlow
         string accountId,
         IAuthRepository authRepo,
         Action<string> onStatus,
+        Action<string>? onAuthUrl,
         CancellationToken ct)
     {
         var flow = new GoogleAuthorizationCodeFlow(new GoogleAuthorizationCodeFlow.Initializer
@@ -59,15 +61,8 @@ internal static class GoogleAuthFlow
         request.Scope = string.Join(" ", Scopes);
         var authUrl = request.Build().ToString();
 
-        if (TryOpenBrowser(authUrl))
-        {
-            onStatus("Browser opened — authorize the app, then return here.");
-        }
-        else
-        {
-            TryCopyToClipboard(authUrl);
-            onStatus($"Open this URL to authorize:\n{authUrl}");
-        }
+        onAuthUrl?.Invoke(authUrl);
+        onStatus($"Open this URL to authorize:\n{authUrl}");
 
         // Wait for the OAuth callback
         var code = await WaitForAuthCodeAsync(listener, ct);
@@ -112,56 +107,75 @@ internal static class GoogleAuthFlow
         return code;
     }
 
-    private static bool TryOpenBrowser(string url)
+    internal static void TryOpenBrowser(string url)
     {
         try
         {
-            var psi = new ProcessStartInfo("xdg-open", url)
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
+                Process.Start(new ProcessStartInfo(url.Replace("&", "^&")) { UseShellExecute = true });
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                Process.Start("xdg-open", url);
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            {
+                Process.Start("open", url);
+            }
+        }
+        catch { /* best-effort — user has the URL in clipboard */ }
+    }
+
+    internal static void TryCopyToClipboard(string text)
+    {
+        try
+        {
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                var proc = Process.Start(new ProcessStartInfo("cmd", $"/c echo {text}| clip")
+                    { RedirectStandardOutput = true, RedirectStandardError = true });
+                proc?.WaitForExit(2000);
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            {
+                var proc = Process.Start(new ProcessStartInfo("pbcopy")
+                    { RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true });
+                if (proc is null) return;
+                proc.StandardInput.Write(text);
+                proc.StandardInput.Close();
+                proc.WaitForExit(2000);
+            }
+            else
+            {
+                // Linux: try wl-copy (Wayland), then xclip (X11)
+                if (!TryLinuxClipboard("wl-copy", text))
+                    TryLinuxClipboard("xclip", text, "-selection", "clipboard");
+            }
+        }
+        catch { /* clipboard is best-effort */ }
+    }
+
+    private static bool TryLinuxClipboard(string cmd, string text, params string[] extraArgs)
+    {
+        try
+        {
+            var psi = new ProcessStartInfo(cmd)
+            {
+                RedirectStandardInput = true,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
             };
+            foreach (var arg in extraArgs)
+                psi.ArgumentList.Add(arg);
             var proc = Process.Start(psi);
-            return proc is not null;
+            if (proc is null) return false;
+            proc.StandardInput.Write(text);
+            proc.StandardInput.Close();
+            proc.WaitForExit(2000);
+            return proc.ExitCode == 0;
         }
-        catch
-        {
-            try
-            {
-                Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-    }
-
-    private static void TryCopyToClipboard(string text)
-    {
-        foreach (var (cmd, args) in new[] { ("wl-copy", text), ("xclip", "-selection clipboard") })
-        {
-            try
-            {
-                var psi = new ProcessStartInfo(cmd, args)
-                {
-                    RedirectStandardInput = cmd == "xclip",
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                };
-                var proc = Process.Start(psi);
-                if (proc is null) continue;
-                if (cmd == "xclip")
-                {
-                    proc.StandardInput.Write(text);
-                    proc.StandardInput.Close();
-                }
-                proc.WaitForExit(2000);
-                return;
-            }
-            catch { /* try next */ }
-        }
+        catch { return false; }
     }
 }
 

@@ -12,7 +12,7 @@ namespace PIM.Setup.Views;
 internal sealed partial class AccountWizardView : View
 {
     private readonly SetupApp _app;
-    private readonly AccountConfig? _editing;
+    private AccountConfig? _editing;
     private int _step;
 
     // Wizard state
@@ -119,13 +119,14 @@ internal sealed partial class AccountWizardView : View
             Source = new ListWrapper<string>(typeOptions),
         };
 
+        typeList.KeystrokeNavigator.Matcher = new NoTypeAheadMatcher();
+
         var next = new Button { X = Pos.AnchorEnd(22), Y = Pos.AnchorEnd(2), Text = "Next" };
         var cancel = new Button { X = Pos.AnchorEnd(10), Y = Pos.AnchorEnd(2), Text = "Cancel" };
 
-        next.Accepting += (_, e) =>
+        void SelectTypeAndAdvance(int index)
         {
-            e.Handled = true;
-            _accountType = (typeList.SelectedItem ?? 0) switch
+            _accountType = index switch
             {
                 0 => AccountType.Imap,
                 1 => AccountType.Google,
@@ -135,11 +136,41 @@ internal sealed partial class AccountWizardView : View
             };
             _step = 1;
             RenderStep();
+        }
+
+        next.Accepting += (_, e) =>
+        {
+            e.Handled = true;
+            SelectTypeAndAdvance(typeList.SelectedItem ?? 0);
+        };
+
+        typeList.Accepting += (_, e) =>
+        {
+            e.Handled = true;
+            SelectTypeAndAdvance(typeList.SelectedItem ?? 0);
+        };
+
+        typeList.KeyDown += (_, e) =>
+        {
+            var index = e switch
+            {
+                _ when e == new Key('1') => 0,
+                _ when e == new Key('2') => 1,
+                _ when e == new Key('3') => 2,
+                _ when e == new Key('4') => 3,
+                _ => -1,
+            };
+            if (index >= 0)
+            {
+                e.Handled = true;
+                SelectTypeAndAdvance(index);
+            }
         };
 
         cancel.Accepting += (_, e) => { _app.ShowView(new AccountListView(_app)); e.Handled = true; };
 
-        Add(title, prompt, typeList, next, cancel);
+        var hint = new Label { X = 4, Y = 9, Text = "Press 1-4 or Enter to select" };
+        Add(title, prompt, typeList, hint, next, cancel);
         App?.Invoke(() => typeList.SetFocus());
     }
 
@@ -555,18 +586,28 @@ internal sealed partial class AccountWizardView : View
         var stepNum = TotalSteps;
         var title = new Label { X = 2, Y = 0, Text = $"Authenticate & Test                           Step {stepNum} of {stepNum}" };
 
+        var guidance = _accountType switch
+        {
+            AccountType.Google or AccountType.Office365 => "Press [Authenticate] to start OAuth.",
+            _ => "Press [Authenticate] to save credentials.",
+        };
+
         var statusText = new TextView
         {
             X = 2, Y = 2,
             Width = Dim.Fill(2),
             Height = Dim.Fill(4),
             ReadOnly = true,
+            WordWrap = true,
+            Text = guidance + "\n",
         };
 
-        var runBtn = new Button { X = 2, Y = Pos.AnchorEnd(2), Text = "Run All" };
-        var skipBtn = new Button { X = 16, Y = Pos.AnchorEnd(2), Text = "Skip" };
-        var backBtn = new Button { X = 28, Y = Pos.AnchorEnd(2), Text = "Back" };
+        var authBtn = new Button { X = 2, Y = Pos.AnchorEnd(2), Text = "Authenticate" };
+        var nextBtn = new Button { X = 20, Y = Pos.AnchorEnd(2), Text = "Next" };
+        var backBtn = new Button { X = 30, Y = Pos.AnchorEnd(2), Text = "Back" };
         var cancelBtn = new Button { X = Pos.AnchorEnd(10), Y = Pos.AnchorEnd(2), Text = "Cancel" };
+
+        string? authUrl = null;
 
         void AppendStatus(string msg)
         {
@@ -577,7 +618,7 @@ internal sealed partial class AccountWizardView : View
             });
         }
 
-        runBtn.Accepting += (_, e) =>
+        authBtn.Accepting += (_, e) =>
         {
             e.Handled = true;
             SaveAccount();
@@ -616,7 +657,13 @@ internal sealed partial class AccountWizardView : View
                             var gSec = string.IsNullOrWhiteSpace(_clientSecret) ? PIM.Core.DefaultCredentials.Google.ClientSecret : _clientSecret;
                             var googleOk = await GoogleAuthFlow.AuthorizeAsync(
                                 gCid, gSec, _id,
-                                _app.AuthRepo, AppendStatus, CancellationToken.None);
+                                _app.AuthRepo, AppendStatus,
+                                url =>
+                                {
+                                    authUrl = url;
+                                    AppendStatus("Press [b] to open in browser, [c] to copy to clipboard");
+                                },
+                                CancellationToken.None);
                             AppendStatus(googleOk ? "[OK] Google token acquired" : "[FAIL] Google auth failed");
                             break;
 
@@ -631,7 +678,7 @@ internal sealed partial class AccountWizardView : View
                             break;
                     }
 
-                    AppendStatus("\nDone. Press [Skip] or [Back] to continue.");
+                    AppendStatus("\nDone. Press [Next] or [Back] to continue.");
                 }
                 catch (Exception ex)
                 {
@@ -640,7 +687,7 @@ internal sealed partial class AccountWizardView : View
             });
         };
 
-        skipBtn.Accepting += (_, e) =>
+        nextBtn.Accepting += (_, e) =>
         {
             e.Handled = true;
             SaveAccount();
@@ -659,7 +706,25 @@ internal sealed partial class AccountWizardView : View
         backBtn.Accepting += (_, e) => { _step--; RenderStep(); e.Handled = true; };
         cancelBtn.Accepting += (_, e) => { _app.ShowView(new AccountListView(_app)); e.Handled = true; };
 
-        Add(title, statusText, runBtn, skipBtn, backBtn, cancelBtn);
+        KeyDown += (_, e) =>
+        {
+            if (authUrl is null) return;
+            if (e == new Key('b'))
+            {
+                GoogleAuthFlow.TryOpenBrowser(authUrl);
+                AppendStatus("Opening browser...");
+                e.Handled = true;
+            }
+            else if (e == new Key('c'))
+            {
+                GoogleAuthFlow.TryCopyToClipboard(authUrl);
+                AppendStatus("URL copied to clipboard.");
+                e.Handled = true;
+            }
+        };
+
+        Add(title, statusText, authBtn, nextBtn, backBtn, cancelBtn);
+        App?.Invoke(() => authBtn.SetFocus());
     }
 
     private void AddNavigationButtons(int y, Func<bool> validate, View[]? formFields = null)
@@ -790,6 +855,10 @@ internal sealed partial class AccountWizardView : View
 
         _app.Config = _app.Config with { Accounts = accounts };
         _app.MarkChanged();
+
+        // Prevent duplicate adds on subsequent calls for new accounts
+        if (_editing is null)
+            _editing = account;
     }
 
     private void CleanupDeselectedCalendars()

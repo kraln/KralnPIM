@@ -58,7 +58,7 @@ internal sealed class AuthenticateView : View
                     var gSec = _account.ClientSecret ?? DefaultCredentials.Google.ClientSecret;
                     var googleOk = await GoogleAuthFlow.AuthorizeAsync(
                         gCid, gSec, _account.Id,
-                        _app.AuthRepo, AppendLine, CancellationToken.None);
+                        _app.AuthRepo, AppendLine, null, CancellationToken.None);
                     AppendLine(googleOk ? "[OK] Google token acquired." : "[FAIL] Google auth failed.");
                     break;
 
