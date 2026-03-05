@@ -10,7 +10,7 @@ This document decomposes the PIM system into **modules** that can be assigned to
 
 | Concern | Decision |
 |---|---|
-| Language / Runtime | C# / .NET 9 with Native AOT publish |
+| Language / Runtime | C# / .NET 10 with Native AOT publish |
 | Database | SQLite via `Microsoft.Data.Sqlite` |
 | Schema Migrations | Hand-written SQL in numbered `.sql` files, applied at startup |
 | Config | `config.yaml` parsed via `YamlDotNet` |
@@ -26,7 +26,7 @@ This document decomposes the PIM system into **modules** that can be assigned to
 ## 2. Solution Structure
 
 ```
-PIM.sln
+PIM.slnx
 ├── src/
 │   ├── PIM.Core/              # Shared models, interfaces, config, DB schema
 │   ├── PIM.Sync.Imap/         # IMAP/SMTP provider
@@ -68,7 +68,7 @@ Parse `config.yaml` into strongly-typed C# records. The config file is the singl
 # config.example.yaml
 accounts:
   - id: "personal-imap"
-    type: imap                # imap | google | office365
+    type: imap                # imap | google | office365 | caldav
     display_name: "Personal"
     imap_host: "mail.example.com"
     imap_port: 993
@@ -77,10 +77,6 @@ accounts:
     smtp_port: 587
     username: "user@example.com"
     # password stored in DB after first setup
-    calendars:
-      - id: "personal-caldav"
-        type: caldav
-        url: "https://radicale.example.com/user/calendar.ics"
 
   - id: "work-google"
     type: google
@@ -88,7 +84,7 @@ accounts:
     client_id: "xxx.apps.googleusercontent.com"
     client_secret: "GOCSPX-xxx"
     # OAuth tokens stored in DB after auth flow
-    calendars: []             # auto-discovered from Google Calendar API
+    calendars: []             # selected during setup from discovered calendars
 
   - id: "work-o365"
     type: office365
@@ -96,7 +92,17 @@ accounts:
     tenant_id: "xxxx-xxxx"
     client_id: "xxxx-xxxx"
     # OAuth tokens stored in DB after auth flow
-    calendars: []             # auto-discovered from Graph API
+    calendars: []             # selected during setup from discovered calendars
+
+  - id: "my-radicale"
+    type: caldav
+    display_name: "Radicale"
+    username: "user@example.com"
+    # password stored in DB after setup
+    calendars:
+      - id: "personal"
+        type: caldav
+        url: "https://radicale.example.com/user/personal.ics"
 
 ui:
   timezone_primary: "America/New_York"
@@ -145,7 +151,7 @@ public sealed record AccountConfig(
     List<CalendarSourceConfig>? Calendars
 );
 
-public enum AccountType { Imap, Google, Office365 }
+public enum AccountType { Imap, Google, Office365, CalDav }
 
 public sealed record CalendarSourceConfig(
     string Id,
@@ -476,12 +482,13 @@ Implement `IMailProvider` and `ICalendarProvider` for Google accounts.
 #### C.2 Implementation Notes
 
 - **OAuth flow:** Use `GoogleAuthorizationCodeFlow`. Print the auth URL to stdout. Use a local loopback redirect (`http://127.0.0.1:{random_port}`) to capture the callback automatically. Store tokens via `IAuthRepository`.
-- **Delta sync (Mail):** Use Gmail API's `history.list` with `historyId` stored in `sync_state.sync_token`. On first sync, use `messages.list` with `after:{date}` query.
-- **Delta sync (Calendar):** Use Calendar API's `events.list` with `syncToken`. On first sync, use `timeMin`/`timeMax` parameters.
+- **Delta sync (Mail):** Use Gmail API's `history.list` with `historyId` stored in `sync_state.sync_token`. On first sync, use `messages.list` with `after:{date}` query. After full sync, save the current history ID from `users.getProfile` (not stale per-message history IDs). If `history.list` returns 404 (NotFound) or 410 (Gone), fall back to full sync.
+- **Delta sync (Calendar):** Use Calendar API's `events.list` with `syncToken`. On first sync, use `timeMin`/`timeMax` parameters. When no calendars are configured (`allowedCalendarIds` is null or empty), skip sync entirely to avoid syncing unwanted auto-discovered calendars.
+- **All-day events:** Store dates with `TimeZoneInfo.Local.GetUtcOffset()` so midnight stays in the local timezone, not UTC.
 - **Body fetch:** `messages.get` with `format=full`. Extract `text/plain` part; if absent, extract `text/html` and strip (same logic as Module B).
 - **Sending:** `messages.send` via Gmail API (not SMTP).
 - **Remote search:** `messages.list` with Gmail's native query syntax (passthrough).
-- **Calendar discovery:** `calendarList.list` to auto-discover all calendars for the account.
+- **Calendar discovery:** `calendarList.list` to discover calendars, then filter to the configured `allowedCalendarIds` set. If no calendars are configured, skip calendar sync entirely.
 - **Rate limiting:** Respect Gmail's 250 quota units/sec. Implement a simple token-bucket rate limiter.
 
 #### C.3 Acceptance Criteria
@@ -514,7 +521,8 @@ Implement `IMailProvider` and `ICalendarProvider` for Office 365 accounts.
 - **Body fetch:** `GET /me/messages/{id}` with `$select=body`. Request `Prefer: outlook.body-content-type="text"` header to get plain text directly from Graph.
 - **Sending:** `POST /me/sendMail`.
 - **Remote search:** `POST /search/query` with `entityTypes: ["message"]`.
-- **Calendar discovery:** `GET /me/calendars` to list all calendars.
+- **Calendar discovery:** `GET /me/calendars` to list calendars, then filter to the configured `allowedCalendarIds` set. If no calendars are configured, skip calendar sync entirely.
+- **All-day events:** Store dates with `TimeZoneInfo.Local.GetUtcOffset()` so midnight stays in the local timezone, not UTC.
 - **Throttling:** Respect `Retry-After` headers on 429 responses. The Graph SDK handles this partially; ensure it's configured.
 
 #### D.3 Acceptance Criteria
@@ -542,7 +550,7 @@ Implement `ICalendarProvider` for CalDAV servers (Radicale, etc.).
 
 - **Protocol:** Use `REPORT` requests with `calendar-query` or `calendar-multiget` (RFC 4791). Use `ctag` (collection tag) or `ETag` per-resource for delta sync.
 - **Auth:** HTTP Basic Auth using credentials from `IAuthRepository`.
-- **Parsing:** Parse iCalendar (`.ics`) responses with `Ical.Net`. Map `VEVENT` components to `CalendarEvent` records.
+- **Parsing:** Parse iCalendar (`.ics`) responses with `Ical.Net`. Map `VEVENT` components to `CalendarEvent` records. All-day events (no time component) store dates with `TimeZoneInfo.Local.GetUtcOffset()` to keep midnight in the local timezone.
 - **Write operations:** Use `PUT` to create/update events (send full `.ics`), `DELETE` to remove.
 - **Sync strategy:** On each sync, fetch the `ctag` for the calendar collection. If it changed, fetch individual event `ETags` and diff against stored state. Only download changed/new events.
 
@@ -877,7 +885,7 @@ public class PimApiClient
 └───────────────────┴───────────────────────────────────────────────────┘
 ```
 
-- Timeline: Fetch `GET /api/calendar/events?start={day1}&end={day4+1}`.
+- Timeline: Fetch `GET /api/calendar/events?start={day1}&end={day4+1}`. All-day events render in a dedicated banner row between the weather forecast header and the hourly time slots.
 - Paginate with `←`/`→` keys (shift the 4-day window by 1 day).
 - `N` key opens the **Event Editor** in place of the timeline:
 

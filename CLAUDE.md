@@ -32,7 +32,7 @@ All code must compile with zero errors and zero warnings (except the known IL305
 - `ISearchService` defined in `PIM.Core/Providers/`, implemented in `PIM.Search`
 - Sync uses delta tokens where the API supports them (`ISyncStateRepository`)
 - CalDAV sync uses ctag/etag diffing — no WebDAV library, hand-rolled HTTP with `HttpClient`
-- OAuth tokens persisted via `IAuthRepository`; CalDAV uses `IAuthRepository.GetImapPasswordAsync` for Basic Auth
+- OAuth tokens persisted via `IAuthRepository`; CalDAV uses `IAuthRepository.GetCalDavPasswordAsync` for Basic Auth
 
 ## Key Patterns
 
@@ -47,6 +47,11 @@ All code must compile with zero errors and zero warnings (except the known IL305
 - IMAP sync token format: JSON `{"uidValidity":N,"maxUid":N,"modseq":N}` — CONDSTORE delta when supported, UID fallback otherwise
 - IMAP uses MailKit `IMessageSummary.Envelope` for header mapping; `MimeMessage` for full body/attachment access
 - MimeKit normalizes `InReplyTo` by stripping angle brackets from message IDs
+- Gmail delta sync: `DeltaSyncAsync` catches both 404 (NotFound) and 410 (Gone) from history API — falls back to `FullSyncAsync` with 30-day window. `FullSyncAsync` saves the current history ID from `users.getProfile` (not stale per-message history IDs)
+- Calendar providers skip sync entirely when `_allowedCalendarIds` is null or empty — prevents syncing unwanted calendars (e.g., auto-discovered holiday calendars)
+- All-day events: all three mappers (Google, Graph, CalDAV) store dates with `TimeZoneInfo.Local.GetUtcOffset()` so midnight stays midnight in the local timezone. TUI `TimeGridView` renders all-day events in a dedicated banner row between the forecast header and time slots
+- `GoogleAuthFlow.AuthorizeAsync` takes an `Action<string>? onAuthUrl` callback — callers get the auth URL for explicit browser/clipboard control instead of auto-launch. `TryOpenBrowser` and `TryCopyToClipboard` are `internal static`
+- Account wizard type selection: `ListView.Accepting` + `KeyDown` for number keys `1`–`4` advance immediately; `NoTypeAheadMatcher` prevents letter-key consumption
 - `TokenBucketRateLimiter` wraps Google API calls to respect quota limits
 - JSON serialization uses source-generated `PimJsonContext` for AOT compatibility
 - `PIM.Server` has its own `ServerJsonContext` for server-specific types (API models, WS events)

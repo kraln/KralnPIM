@@ -154,7 +154,7 @@ Status line at top shows:
   IMAP       Personal             Has password      [E]dit [T]est [D]el
   Google     Work (Google)        Has token          [E]dit [T]est [D]el
   O365       Work (O365)          No token           [E]dit [T]est [D]el
-  CalDAV     Radicale             Has password      [E]dit [T]est [D]el
+  CalDAV     Radicale             Has password       [E]dit [T]est [D]el
 ```
 
 `ListView` of configured accounts. Auth status column queries the DB:
@@ -193,7 +193,9 @@ Multi-step form within `AccountWizardView`. Each step validates before allowing 
                                              [Next]   [Cancel]
 ```
 
-`ListView` with 4 options (RadioGroup does not exist in Terminal.Gui v2). Selection determines subsequent steps:
+`ListView` with 4 options (RadioGroup does not exist in Terminal.Gui v2). `NoTypeAheadMatcher` disables letter-key search so number keys work. Enter on a selected item (via `ListView.Accepting`) or pressing `1`–`4` (via `KeyDown` with `new Key('1')` etc.) selects the type and immediately advances to the next step. A hint label reads "Press 1-4 or Enter to select".
+
+Selection determines subsequent steps:
 - IMAP: 4 steps (type → fields → password → auth+test)
 - Google: 3 steps (type → fields → auth+test)
 - O365: 3 steps (type → fields → auth+test)
@@ -334,12 +336,14 @@ Validation:
 ```
   Authenticate & Test Connection                      Step 4 of 4
 
+  Press [Authenticate] to save credentials.
+
   [ ] Initialize database
   [ ] Save credentials
   [ ] Test IMAP connection
   [ ] Test SMTP connection
 
-                         [Run All]   [Skip]   [Back]   [Cancel]
+                         [Authenticate]   [Next]   [Back]   [Cancel]
 ```
 
 ### 4.7 Final Step (Google / O365): Authenticate & Test
@@ -347,14 +351,16 @@ Validation:
 ```
   Authenticate & Test Connection                      Step 3 of 3
 
+  Press [Authenticate] to start OAuth.
+
   [ ] Initialize database
   [ ] Authenticate (OAuth)
   [ ] Verify token
 
-                         [Run All]   [Skip]   [Back]   [Cancel]
+                         [Authenticate]   [Next]   [Back]   [Cancel]
 ```
 
-When "Run All" is pressed, each check runs sequentially with status updates:
+The Authenticate button has default focus. When pressed, each check runs sequentially with status updates:
 
 ```
   [OK]   Initialize database
@@ -364,7 +370,9 @@ When "Run All" is pressed, each check runs sequentially with status updates:
                           [Retry]   [Done]   [Back]
 ```
 
-For Google, the authenticate step runs the loopback OAuth flow (see Section 5.1). For O365, it runs the device code flow (see Section 5.2). "Skip" saves the account config without testing. "Done" returns to account list.
+For Google, the authenticate step runs the loopback OAuth flow (see Section 5.1). For O365, it runs the device code flow (see Section 5.2). "Next" saves the account config without testing. "Done" returns to account list.
+
+**SaveAccount idempotency:** `SaveAccount()` is called at multiple wizard steps. To prevent duplicate account entries, after the first save for a new account, the wizard sets `_editing = account` so subsequent saves update the existing entry instead of appending.
 
 Checks per account type:
 - **IMAP**: Save password to DB → IMAP connect+auth → SMTP connect+auth
@@ -394,8 +402,8 @@ Adapted from `GoogleOAuthHelper.AuthorizeAsync` in `src/PIM.Sync.Google/GoogleOA
 4. Allocate random loopback port via `TcpListener(IPAddress.Loopback, 0)`
 5. Start `HttpListener` on `http://127.0.0.1:{port}/`
 6. Build authorization URL via `flow.CreateAuthorizationCodeRequest(redirectUri).Build()`
-7. Open browser: `Process.Start(new ProcessStartInfo(url) { UseShellExecute = true })`
-8. Update TUI: "Opening browser... If it doesn't open, visit: {url}"
+7. Invoke `onAuthUrl?.Invoke(url)` callback — caller receives the URL for explicit browser/clipboard control
+8. Update TUI via `onStatus`: "Open this URL to authorize:\n{url}"
 9. Wait for callback asynchronously (with cancellation support)
 10. Extract `code` from query string
 11. Exchange code via `flow.ExchangeCodeForTokenAsync(accountId, code, redirectUri, ct)`
@@ -403,6 +411,8 @@ Adapted from `GoogleOAuthHelper.AuthorizeAsync` in `src/PIM.Sync.Google/GoogleOA
 13. Return HTML response to browser: "Authorization successful! You can close this window."
 
 **TUI coordination:** The `HttpListener` runs on `Task.Run` to avoid blocking the Terminal.Gui event loop. Status updates via `App?.Invoke()` (instance API, not static `Application.Invoke()`). A "Cancel" button cancels the `CancellationTokenSource`, which stops the listener.
+
+**Browser/clipboard:** `TryOpenBrowser` and `TryCopyToClipboard` are `internal static` methods on `GoogleAuthFlow`. They are NOT called automatically during `AuthorizeAsync` — instead, the auth URL is passed to the caller via the `onAuthUrl` callback. The account wizard binds `b` → `TryOpenBrowser(url)` and `c` → `TryCopyToClipboard(url)` as explicit key handlers, with guidance text: "Press [b] to open in browser, [c] to copy to clipboard". This works reliably inside the TUI (unlike auto-launch which silently fails).
 
 ### 5.2 Office 365 Device Code (GraphAuthFlow)
 

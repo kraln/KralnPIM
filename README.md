@@ -65,13 +65,13 @@ Copy `config.example.yaml` to `~/.pim/config.yaml` and fill in your account deta
 
 ## Features
 
-- **Multi-provider aggregation**: IMAP/SMTP, Gmail (OAuth2), Office 365 (MSAL), CalDAV
+- **Multi-provider aggregation**: IMAP/SMTP, Gmail (OAuth2), Office 365 (MSAL), CalDAV — with delta sync and automatic fallback on expired tokens/history IDs
 - **Unified search**: Local FTS5 + parallel remote deep search with dedup
 - **Real-time sync**: WebSocket push for mail, calendar, and account status changes
 - **Dashboard**: Upcoming agenda, weather, power, world clocks, mail overview
-- **Calendar**: 4-day timeline with event creation/editing, left/right day navigation
+- **Calendar**: 4-day timeline with weather forecasts, now line, sunrise/sunset markers, all-day event banner row, event creation/editing, left/right day navigation
 - **Email**: Inbox with read/unread/flagged filters, search, compose/reply, attachments
-- **Setup wizard**: Guided account configuration with connection testing, SSL error bypass
+- **Setup wizard**: Guided account configuration with OAuth flows, connection testing, calendar discovery, SSL error bypass
 - **System info**: Battery/power (Linux `/sys/`), weather (Open-Meteo), multi-timezone clocks
 
 ## Status
