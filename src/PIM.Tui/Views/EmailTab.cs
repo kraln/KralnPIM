@@ -162,17 +162,25 @@ internal sealed class EmailTab : View
 
         Add(_inboxFrame, _readerFrame);
 
-        // Enter on inbox focuses the reader body for scrolling; Esc returns to inbox.
+        // Right from inbox enters reader; Left from reader returns to inbox.
         // Reader views are CanFocus=false by default to prevent focus stealing during async updates.
         KeyDown += (_, e) =>
         {
             if (_composeView is not null) return; // Let compose handle its own focus
 
-            if (e == Key.Enter && _inboxList.HasFocus && _currentDetail is not null)
+            if (e == Key.CursorRight && _inboxList.HasFocus && _currentDetail is not null)
             {
                 _readerFrame.CanFocus = true;
                 _readerBody.CanFocus = true;
                 _readerBody.SetFocus();
+                e.Handled = true;
+            }
+            else if (e == Key.CursorLeft && (_readerBody.HasFocus || _attachmentList.HasFocus))
+            {
+                _attachmentList.CanFocus = false;
+                _readerBody.CanFocus = false;
+                _readerFrame.CanFocus = false;
+                _inboxList.SetFocus();
                 e.Handled = true;
             }
             else if (e == Key.Esc)
@@ -195,8 +203,8 @@ internal sealed class EmailTab : View
         // Key handlers go on _inboxList (the focused control) so they fire before ListView's type-ahead search
         _inboxList.KeyDown += (_, e) =>
         {
-            // Prevent Left/Right from propagating to TabView (which would switch tabs)
-            if (e == Key.CursorLeft || e == Key.CursorRight)
+            // Left on inbox is a no-op (prevent propagation to TabView)
+            if (e == Key.CursorLeft)
             {
                 e.Handled = true;
             }
