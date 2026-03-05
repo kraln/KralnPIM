@@ -88,8 +88,9 @@ public class CalDavEventMapperTests
         var result = CalDavEventMapper.ToCalendarEvent(evt, AccountId, CalendarId);
 
         Assert.True(result.IsAllDay);
-        Assert.Equal(new DateTimeOffset(2024, 12, 25, 0, 0, 0, TimeSpan.Zero), result.Start);
-        Assert.Equal(new DateTimeOffset(2024, 12, 26, 0, 0, 0, TimeSpan.Zero), result.End);
+        var expectedOffset = TimeZoneInfo.Local.GetUtcOffset(new DateTime(2024, 12, 25));
+        Assert.Equal(new DateTimeOffset(2024, 12, 25, 0, 0, 0, expectedOffset), result.Start);
+        Assert.Equal(new DateTimeOffset(2024, 12, 26, 0, 0, 0, expectedOffset), result.End);
     }
 
     [Fact]
@@ -372,14 +373,15 @@ public class CalDavEventMapperTests
     [Fact]
     public void RoundTrip_AllDayEvent_PreservesData()
     {
+        var localOffset = TimeZoneInfo.Local.GetUtcOffset(new DateTime(2024, 12, 25));
         var original = new CalendarEvent(
             EventId: "rt2",
             AccountId: AccountId,
             CalendarId: CalendarId,
             Summary: "All Day Round Trip",
             Description: null,
-            Start: new DateTimeOffset(2024, 12, 25, 0, 0, 0, TimeSpan.Zero),
-            End: new DateTimeOffset(2024, 12, 26, 0, 0, 0, TimeSpan.Zero),
+            Start: new DateTimeOffset(2024, 12, 25, 0, 0, 0, localOffset),
+            End: new DateTimeOffset(2024, 12, 26, 0, 0, 0, localOffset),
             IsAllDay: true,
             Location: null,
             Invitees: [],

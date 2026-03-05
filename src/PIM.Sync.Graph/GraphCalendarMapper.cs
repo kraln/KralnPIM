@@ -107,7 +107,7 @@ public static class GraphCalendarMapper
         if (evt.IsAllDay == true && evt.Start is not null)
         {
             if (DateTime.TryParse(evt.Start.DateTime, out var date))
-                return (new DateTimeOffset(date, TimeSpan.Zero), true);
+                return (AllDayMidnight(date), true);
         }
 
         if (evt.Start is not null)
@@ -128,7 +128,7 @@ public static class GraphCalendarMapper
         if (isAllDay)
         {
             if (DateTime.TryParse(evt.End.DateTime, out var date))
-                return new DateTimeOffset(date, TimeSpan.Zero);
+                return AllDayMidnight(date);
         }
         else
         {
@@ -138,6 +138,12 @@ public static class GraphCalendarMapper
         }
 
         return DateTimeOffset.MinValue;
+    }
+
+    private static DateTimeOffset AllDayMidnight(DateTime date)
+    {
+        var dt = date.Date;
+        return new DateTimeOffset(dt, TimeZoneInfo.Local.GetUtcOffset(dt));
     }
 
     private static TimeZoneInfo ParseTimeZone(string? timeZone)

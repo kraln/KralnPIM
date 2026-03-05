@@ -57,8 +57,9 @@ public class CalendarMapperTests
         var result = CalendarMapper.ToCalendarEvent(evt, AccountId, CalendarId);
 
         Assert.True(result.IsAllDay);
-        Assert.Equal(new DateTimeOffset(2024, 12, 25, 0, 0, 0, TimeSpan.Zero), result.Start);
-        Assert.Equal(new DateTimeOffset(2024, 12, 26, 0, 0, 0, TimeSpan.Zero), result.End);
+        var expectedOffset = TimeZoneInfo.Local.GetUtcOffset(new DateTime(2024, 12, 25));
+        Assert.Equal(new DateTimeOffset(2024, 12, 25, 0, 0, 0, expectedOffset), result.Start);
+        Assert.Equal(new DateTimeOffset(2024, 12, 26, 0, 0, 0, expectedOffset), result.End);
     }
 
     [Fact]

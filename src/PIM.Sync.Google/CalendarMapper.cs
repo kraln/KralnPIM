@@ -91,7 +91,7 @@ public static class CalendarMapper
 
         if (!string.IsNullOrEmpty(evt.Start?.Date) &&
             DateOnly.TryParse(evt.Start.Date, out var dateOnly))
-            return (new DateTimeOffset(dateOnly.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero), true);
+            return (AllDayMidnight(dateOnly), true);
 
         return (DateTimeOffset.MinValue, false);
     }
@@ -103,9 +103,15 @@ public static class CalendarMapper
 
         if (isAllDay && !string.IsNullOrEmpty(evt.End?.Date) &&
             DateOnly.TryParse(evt.End.Date, out var dateOnly))
-            return new DateTimeOffset(dateOnly.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+            return AllDayMidnight(dateOnly);
 
         return DateTimeOffset.MinValue;
+    }
+
+    private static DateTimeOffset AllDayMidnight(DateOnly date)
+    {
+        var dt = date.ToDateTime(TimeOnly.MinValue);
+        return new DateTimeOffset(dt, TimeZoneInfo.Local.GetUtcOffset(dt));
     }
 
     private static EventStatus MapStatus(string? status) => status?.ToLowerInvariant() switch

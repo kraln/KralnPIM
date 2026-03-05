@@ -14,7 +14,7 @@ internal sealed class TimeGridView : View
 {
     private const int SlotsPerHour = 4;
     private const int TotalSlots = 24 * SlotsPerHour; // 96
-    private const int HeaderRows = 2; // row 0: day names, row 1: forecast
+    private const int BaseHeaderRows = 2; // row 0: day names, row 1: forecast
     private const int TimeGutterWidth = 6;
     private const int SeparatorCount = 4; // 1 after gutter + 3 between columns
     private const int DefaultStartSlot = 8 * SlotsPerHour; // 08:00
@@ -31,6 +31,11 @@ internal sealed class TimeGridView : View
 
     private DateTimeOffset _windowStart;
     private readonly CalendarEvent?[,] _grid = new CalendarEvent?[4, TotalSlots];
+
+    // Per-day all-day event summaries for the banner row
+    private readonly string?[] _allDayLabels = new string?[4];
+    private bool _hasAllDay;
+    private int HeaderRows => _hasAllDay ? BaseHeaderRows + 1 : BaseHeaderRows;
 
     // Per-day sun times: _sunSlots[day] = (sunriseSlot, sunsetSlot), -1 if unavailable
     private readonly (int sunrise, int sunset)[] _sunSlots = [(-1, -1), (-1, -1), (-1, -1), (-1, -1)];
@@ -103,9 +108,27 @@ internal sealed class TimeGridView : View
     private void RebuildGrid(List<CalendarEvent> events)
     {
         Array.Clear(_grid);
+        Array.Clear(_allDayLabels);
+        _hasAllDay = false;
+
+        // Collect all-day labels per day
+        var allDayPerDay = new List<string>[4];
+        for (var i = 0; i < 4; i++) allDayPerDay[i] = [];
 
         foreach (var evt in events)
         {
+            if (evt.IsAllDay)
+            {
+                for (var day = 0; day < 4; day++)
+                {
+                    var dayStart = _windowStart.AddDays(day);
+                    var dayEnd = dayStart.AddDays(1);
+                    if (evt.Start < dayEnd && evt.End > dayStart)
+                        allDayPerDay[day].Add(evt.Summary);
+                }
+                continue;
+            }
+
             for (var day = 0; day < 4; day++)
             {
                 var dayStart = _windowStart.AddDays(day);
@@ -134,6 +157,15 @@ internal sealed class TimeGridView : View
 
                 for (var slot = startSlot; slot < endSlot; slot++)
                     _grid[day, slot] ??= evt;
+            }
+        }
+
+        for (var day = 0; day < 4; day++)
+        {
+            if (allDayPerDay[day].Count > 0)
+            {
+                _allDayLabels[day] = string.Join(", ", allDayPerDay[day]);
+                _hasAllDay = true;
             }
         }
     }
@@ -191,7 +223,23 @@ internal sealed class TimeGridView : View
             if (day < 3) AddRune('|');
         }
 
-        // Rows 2+: time slots
+        // Row 2 (conditional): all-day banner
+        if (_hasAllDay)
+        {
+            var allDayAttr = new GuiAttribute(StandardColor.White, StandardColor.DarkGray);
+            Move(0, BaseHeaderRows);
+            SetAttribute(allDayAttr);
+            AddStr(PadCenter("", TimeGutterWidth));
+            AddRune('|');
+            for (var day = 0; day < 4; day++)
+            {
+                var label = _allDayLabels[day] ?? "";
+                AddStr(Fit(label, colWidth));
+                if (day < 3) AddRune('|');
+            }
+        }
+
+        // Rows 2+/3+: time slots
         var visibleSlots = height - HeaderRows;
         for (var row = 0; row < visibleSlots; row++)
         {

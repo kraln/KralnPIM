@@ -165,7 +165,9 @@ internal sealed class DashboardTab : View
                     currentDate = eventDate;
                 }
 
-                lines.Add($"  {e.Start.ToLocalTime():HH:mm}  {e.Summary}");
+                lines.Add(e.IsAllDay
+                    ? $"  All day  {e.Summary}"
+                    : $"  {e.Start.ToLocalTime():HH:mm}  {e.Summary}");
             }
 
             if (lines.Count == 0)

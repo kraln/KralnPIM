@@ -145,9 +145,14 @@ internal sealed class CalendarTab : View
             _agendaList.SetSource(new ObservableCollection<string>(
                 _todayEvents.Select(e =>
                 {
+                    if (e.IsAllDay)
+                    {
+                        var prefix = e.Start.ToLocalTime().Date == today ? "All day  " : $"{e.Start.ToLocalTime():MMM d} All day";
+                        return $"{prefix}  {e.Summary}";
+                    }
                     var date = e.Start.ToLocalTime();
-                    var prefix = date.Date == today ? $"{date:HH:mm}    " : $"{date:MMM d} {date:HH:mm}";
-                    return $"{prefix}  {e.Summary}";
+                    var pfx = date.Date == today ? $"{date:HH:mm}    " : $"{date:MMM d} {date:HH:mm}";
+                    return $"{pfx}  {e.Summary}";
                 })));
         });
     }
@@ -209,6 +214,8 @@ internal sealed class CalendarTab : View
         var lines = dayEvents.Count > 0
             ? dayEvents.Select(e =>
             {
+                if (e.IsAllDay)
+                    return $"All day  {e.Summary}";
                 var t = e.Start.ToLocalTime();
                 return $"{t:HH:mm}  {e.Summary}";
             }).ToList()

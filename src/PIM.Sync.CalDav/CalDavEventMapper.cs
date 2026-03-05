@@ -101,11 +101,13 @@ public static class CalDavEventMapper
         if (isAllDay)
         {
             var d = evt.DtStart.Date;
-            start = new DateTimeOffset(d.Year, d.Month, d.Day, 0, 0, 0, TimeSpan.Zero);
+            var dt = new DateTime(d.Year, d.Month, d.Day);
+            start = new DateTimeOffset(dt, TimeZoneInfo.Local.GetUtcOffset(dt));
             if (evt.DtEnd is not null)
             {
                 var de = evt.DtEnd.Date;
-                end = new DateTimeOffset(de.Year, de.Month, de.Day, 0, 0, 0, TimeSpan.Zero);
+                var dte = new DateTime(de.Year, de.Month, de.Day);
+                end = new DateTimeOffset(dte, TimeZoneInfo.Local.GetUtcOffset(dte));
             }
             else
             {
