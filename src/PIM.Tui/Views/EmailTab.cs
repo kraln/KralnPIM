@@ -506,17 +506,20 @@ internal sealed class EmailTab : View
             _ => " "
         };
         var date = m.Date.ToLocalTime().ToString("MMM d");
-        var subject = Truncate(m.Subject ?? "(no subject)", 25);
-        var from = Truncate(m.FromDisplayName ?? m.FromAddress, 15);
-        return $"{unread}{extra} {subject}  {from}  {date}";
+        var subject = Truncate(StripZeroWidth(m.Subject ?? "(no subject)"), 25);
+        var from = Truncate(StripZeroWidth(m.FromDisplayName ?? m.FromAddress), 15);
+        return $"{unread}{extra} {subject,-25}  {from,-15}  {date}";
     }
 
     /// <summary>Defers SetFocus to the next main loop iteration.</summary>
     private void DeferFocusToInbox() =>
         _app.App?.Invoke(() => _inboxList.SetFocus());
 
+    private static string StripZeroWidth(string value) =>
+        string.Concat(value.Where(c => c is not ('\u200B' or '\u200C' or '\u200D' or '\uFEFF')));
+
     private static string Truncate(string value, int maxLength) =>
-        value.Length <= maxLength ? value.PadRight(maxLength) : value[..(maxLength - 3)] + "...";
+        value.Length <= maxLength ? value : value[..(maxLength - 3)] + "...";
 
     private static string FormatSize(long bytes) => bytes switch
     {
