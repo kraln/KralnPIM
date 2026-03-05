@@ -74,28 +74,13 @@ internal sealed class TuiApp : Window
         // Global keybindings (fires when no child view handles the key)
         KeyDown += (_, e) =>
         {
-            if ((e == Key.CursorLeft.WithCtrl || e == Key.CursorRight.WithCtrl) && !IsEditing())
+            if (e == Key.Tab && !IsEditing())
             {
                 var tabs = _tabs.Tabs.ToList();
                 var curIdx = tabs.IndexOf(_tabs.SelectedTab!);
-                var newIdx = e == Key.CursorLeft.WithCtrl
-                    ? (curIdx - 1 + tabs.Count) % tabs.Count
-                    : (curIdx + 1) % tabs.Count;
+                var newIdx = (curIdx + 1) % tabs.Count;
                 _tabs.SelectedTab = tabs[newIdx];
                 tabs[newIdx].View?.SetFocus();
-                e.Handled = true;
-            }
-            else if (!IsEditing() &&
-                     (e == new Key('1').WithAlt || e == new Key('2').WithAlt || e == new Key('3').WithAlt))
-            {
-                var idx = e == new Key('1').WithAlt ? 0
-                    : e == new Key('2').WithAlt ? 1 : 2;
-                var tabs = _tabs.Tabs.ToList();
-                if (idx < tabs.Count)
-                {
-                    _tabs.SelectedTab = tabs[idx];
-                    tabs[idx].View?.SetFocus();
-                }
                 e.Handled = true;
             }
             else if (e == Key.Q && !IsEditing())
@@ -222,7 +207,7 @@ internal sealed class TuiApp : Window
             "Calendar" => string.Join("\n", [
                 "Calendar Keys:",
                 "",
-                "  Alt+1/2/3   Switch tabs",
+                "  Tab         Next tab",
                 "  Up/Down     Move cursor through time",
                 "  Left/Right  Move between day columns",
                 "              (shifts window at edges)",
@@ -236,9 +221,9 @@ internal sealed class TuiApp : Window
             "Email" => string.Join("\n", [
                 "Email Keys:",
                 "",
-                "  Alt+1/2/3   Switch tabs",
+                "  Tab         Next tab",
                 "  Up/Down     Navigate messages",
-                "  Tab         Switch to reader (scroll)",
+                "  Enter       Read mode (scroll body)",
                 "  Esc         Back to inbox list",
                 "  N           Compose new email",
                 "  R           Reply to selected",
@@ -254,7 +239,7 @@ internal sealed class TuiApp : Window
             _ => string.Join("\n", [
                 "Dashboard Keys:",
                 "",
-                "  Alt+1/2/3   Switch tabs",
+                "  Tab         Next tab",
                 "  Up/Down     Navigate lists",
                 "  Q           Quit",
                 "  ?           This help"

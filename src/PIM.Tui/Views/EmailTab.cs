@@ -162,64 +162,25 @@ internal sealed class EmailTab : View
 
         Add(_inboxFrame, _readerFrame);
 
-        // Intercept Tab/Shift+Tab at the EmailTab level to prevent focus escaping to TabView.
+        // Enter on inbox focuses the reader body for scrolling; Esc returns to inbox.
         // Reader views are CanFocus=false by default to prevent focus stealing during async updates.
-        // Tab explicitly enables focus before switching; Esc disables it when leaving.
         KeyDown += (_, e) =>
         {
             if (_composeView is not null) return; // Let compose handle its own focus
 
-            if (e == Key.Tab)
+            if (e == Key.Enter && _inboxList.HasFocus && _currentDetail is not null)
             {
-                if (_inboxList.HasFocus)
-                {
-                    if (_currentDetail is not null)
-                    {
-                        _readerFrame.CanFocus = true;
-                        _readerBody.CanFocus = true;
-                        _readerBody.SetFocus();
-                    }
-                }
-                else if (_readerBody.HasFocus)
-                {
-                    _readerBody.CanFocus = false;
-                    if (_attachmentList.Visible)
-                    {
-                        _attachmentList.CanFocus = true;
-                        _attachmentList.SetFocus();
-                    }
-                    else
-                    {
-                        _readerFrame.CanFocus = false;
-                        _inboxList.SetFocus();
-                    }
-                }
-                else
-                {
-                    _attachmentList.CanFocus = false;
-                    _readerFrame.CanFocus = false;
-                    _inboxList.SetFocus();
-                }
+                _readerFrame.CanFocus = true;
+                _readerBody.CanFocus = true;
+                _readerBody.SetFocus();
                 e.Handled = true;
             }
-            else if (e == Key.Tab.WithShift)
+            else if (e == Key.Esc)
             {
-                if (_attachmentList.HasFocus)
-                {
-                    _attachmentList.CanFocus = false;
-                    _readerBody.CanFocus = true;
-                    _readerBody.SetFocus();
-                }
-                else if (_readerBody.HasFocus)
-                {
-                    _readerBody.CanFocus = false;
-                    _readerFrame.CanFocus = false;
-                    _inboxList.SetFocus();
-                }
-                else
-                {
-                    _inboxList.SetFocus();
-                }
+                _attachmentList.CanFocus = false;
+                _readerBody.CanFocus = false;
+                _readerFrame.CanFocus = false;
+                _inboxList.SetFocus();
                 e.Handled = true;
             }
         };
