@@ -48,16 +48,22 @@ public sealed class GoogleCalendarProvider : ICalendarProvider
             ApplicationName = "KralnPIM",
         });
 
-        // Discover calendars
+        if (_allowedCalendarIds is null or { Count: 0 })
+        {
+            _calendarIds = [];
+            _logger.LogInformation(
+                "Google Calendar authenticated for {AccountId}, no calendars configured — skipping sync",
+                AccountId);
+            return;
+        }
+
+        // Discover calendars, then filter to configured set
         await _rateLimiter.WaitAsync(1, ct);
         var calendarList = await _service.CalendarList.List().ExecuteAsync(ct);
         _calendarIds = calendarList.Items?
             .Select(c => c.Id)
-            .Where(id => !string.IsNullOrEmpty(id))
+            .Where(id => !string.IsNullOrEmpty(id) && _allowedCalendarIds.Contains(id))
             .ToList() ?? [];
-
-        if (_allowedCalendarIds is { Count: > 0 })
-            _calendarIds = _calendarIds.Where(id => _allowedCalendarIds.Contains(id)).ToList();
 
         _logger.LogInformation("Google Calendar authenticated for {AccountId}, syncing {Count} calendars",
             AccountId, _calendarIds.Count);

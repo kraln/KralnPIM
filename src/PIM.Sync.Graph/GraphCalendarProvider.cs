@@ -41,15 +41,21 @@ public sealed class GraphCalendarProvider : ICalendarProvider
         var token = await _authProvider.GetAccessTokenAsync(ct);
         _client = GraphClientFactory.Create(token);
 
-        // Discover calendars
+        if (_allowedCalendarIds is null or { Count: 0 })
+        {
+            _calendarIds = [];
+            _logger.LogInformation(
+                "Graph Calendar authenticated for {AccountId}, no calendars configured — skipping sync",
+                AccountId);
+            return;
+        }
+
+        // Discover calendars, then filter to configured set
         var calendars = await _client.Me.Calendars.GetAsync(cancellationToken: ct);
         _calendarIds = calendars?.Value?
-            .Where(c => !string.IsNullOrEmpty(c.Id))
+            .Where(c => !string.IsNullOrEmpty(c.Id) && _allowedCalendarIds.Contains(c.Id))
             .Select(c => c.Id!)
             .ToList() ?? [];
-
-        if (_allowedCalendarIds is { Count: > 0 })
-            _calendarIds = _calendarIds.Where(id => _allowedCalendarIds.Contains(id)).ToList();
 
         _logger.LogInformation("Graph Calendar authenticated for {AccountId}, syncing {Count} calendars",
             AccountId, _calendarIds.Count);

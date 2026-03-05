@@ -198,6 +198,12 @@ public sealed class GoogleMailProvider : IMailProvider
             pageToken = listResponse.NextPageToken;
         } while (pageToken is not null);
 
+        // Get the current history ID from the profile — message-level history IDs
+        // can be stale and cause 404 on the next delta sync.
+        await _rateLimiter.WaitAsync(5, ct);
+        var profile = await _service!.Users.GetProfile(UserId).ExecuteAsync(ct);
+        latestHistoryId = profile.HistoryId?.ToString() ?? latestHistoryId;
+
         if (latestHistoryId is not null)
         {
             await _syncStateRepo.SetAsync(AccountId, ResourceType,
@@ -208,6 +214,21 @@ public sealed class GoogleMailProvider : IMailProvider
     }
 
     private async Task<SyncResult<EmailHeader>> DeltaSyncAsync(string historyId, CancellationToken ct)
+    {
+        try
+        {
+            return await DeltaSyncCoreAsync(historyId, ct);
+        }
+        catch (global::Google.GoogleApiException ex)
+            when (ex.HttpStatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.Gone)
+        {
+            // History ID expired — fall back to full sync
+            _logger.LogWarning("Gmail history ID expired for {AccountId}, performing full sync", AccountId);
+            return await FullSyncAsync(DateTimeOffset.UtcNow.AddDays(-30), ct);
+        }
+    }
+
+    private async Task<SyncResult<EmailHeader>> DeltaSyncCoreAsync(string historyId, CancellationToken ct)
     {
         var upserted = new List<EmailHeader>();
         var deletedIds = new List<string>();
