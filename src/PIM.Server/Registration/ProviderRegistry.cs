@@ -2,6 +2,7 @@ using PIM.Core;
 using PIM.Core.Config;
 using PIM.Core.Data;
 using PIM.Core.Providers;
+using PIM.Server.Services;
 using PIM.Sync.CalDav;
 using PIM.Sync.Google;
 using PIM.Sync.Graph;
@@ -55,20 +56,38 @@ public class ProviderRegistry
         }
     }
 
-    public async Task AuthenticateAllAsync(CancellationToken ct)
+    public async Task AuthenticateAllAsync(AccountStatusTracker statusTracker, CancellationToken ct)
     {
         foreach (var (accountId, provider) in _mailProviders)
         {
-            _logger.LogInformation("Authenticating mail provider for {AccountId}", accountId);
-            await provider.AuthenticateAsync(ct);
+            try
+            {
+                _logger.LogInformation("Authenticating mail provider for {AccountId}", accountId);
+                await provider.AuthenticateAsync(ct);
+                statusTracker.MarkOnline(accountId);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogError(ex, "Failed to authenticate mail provider for {AccountId}, marking offline", accountId);
+                statusTracker.MarkOffline(accountId);
+            }
         }
 
         foreach (var (accountId, providers) in _calendarProviders)
         {
             foreach (var provider in providers)
             {
-                _logger.LogInformation("Authenticating calendar provider for {AccountId}", accountId);
-                await provider.AuthenticateAsync(ct);
+                try
+                {
+                    _logger.LogInformation("Authenticating calendar provider for {AccountId}", accountId);
+                    await provider.AuthenticateAsync(ct);
+                    statusTracker.MarkOnline(accountId);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    _logger.LogError(ex, "Failed to authenticate calendar provider for {AccountId}, marking offline", accountId);
+                    statusTracker.MarkOffline(accountId);
+                }
             }
         }
     }

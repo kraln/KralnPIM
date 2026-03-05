@@ -5,6 +5,7 @@ using PIM.Core.Serialization;
 using PIM.Server.Models;
 using PIM.Server.Api;
 using PIM.Server.Registration;
+using PIM.Server.Services;
 using PIM.Server.WebSocket;
 
 var configPath = args.Length > 0
@@ -54,7 +55,9 @@ await registry.InitializeAsync(
     app.Services.GetRequiredService<IHttpClientFactory>(),
     CancellationToken.None);
 
-await registry.AuthenticateAllAsync(CancellationToken.None);
+await registry.AuthenticateAllAsync(
+    app.Services.GetRequiredService<AccountStatusTracker>(),
+    CancellationToken.None);
 
 // 6. WebSocket middleware on WS port
 app.UseWebSockets();

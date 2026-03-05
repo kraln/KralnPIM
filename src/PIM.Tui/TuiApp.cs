@@ -209,7 +209,7 @@ internal sealed class TuiApp : Window
                 "  Enter       Open selected message",
                 "  C           Compose new email",
                 "  R           Reply to selected",
-                "  S           Search",
+                "  /           Search",
                 "  Q           Quit",
                 "  ?           This help"
             ]),
