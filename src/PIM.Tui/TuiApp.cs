@@ -86,10 +86,10 @@ internal sealed class TuiApp : Window
                 e.Handled = true;
             }
             else if (!IsEditing() &&
-                     (e == new Key('1').WithCtrl || e == new Key('2').WithCtrl || e == new Key('3').WithCtrl))
+                     (e == new Key('1').WithAlt || e == new Key('2').WithAlt || e == new Key('3').WithAlt))
             {
-                var idx = e == new Key('1').WithCtrl ? 0
-                    : e == new Key('2').WithCtrl ? 1 : 2;
+                var idx = e == new Key('1').WithAlt ? 0
+                    : e == new Key('2').WithAlt ? 1 : 2;
                 var tabs = _tabs.Tabs.ToList();
                 if (idx < tabs.Count)
                 {
@@ -222,7 +222,7 @@ internal sealed class TuiApp : Window
             "Calendar" => string.Join("\n", [
                 "Calendar Keys:",
                 "",
-                "  Ctrl+1/2/3  Switch tabs",
+                "  Alt+1/2/3   Switch tabs",
                 "  Up/Down     Move cursor through time",
                 "  Left/Right  Move between day columns",
                 "              (shifts window at edges)",
@@ -236,7 +236,7 @@ internal sealed class TuiApp : Window
             "Email" => string.Join("\n", [
                 "Email Keys:",
                 "",
-                "  Ctrl+1/2/3  Switch tabs",
+                "  Alt+1/2/3   Switch tabs",
                 "  Up/Down     Navigate messages",
                 "  Tab         Switch to reader (scroll)",
                 "  Esc         Back to inbox list",
@@ -254,7 +254,7 @@ internal sealed class TuiApp : Window
             _ => string.Join("\n", [
                 "Dashboard Keys:",
                 "",
-                "  Ctrl+1/2/3  Switch tabs",
+                "  Alt+1/2/3   Switch tabs",
                 "  Up/Down     Navigate lists",
                 "  Q           Quit",
                 "  ?           This help"
