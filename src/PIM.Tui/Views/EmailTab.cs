@@ -516,7 +516,7 @@ internal sealed class EmailTab : View
         _app.App?.Invoke(() => _inboxList.SetFocus());
 
     private static string Truncate(string value, int maxLength) =>
-        value.Length <= maxLength ? value : value[..(maxLength - 3)] + "...";
+        value.Length <= maxLength ? value.PadRight(maxLength) : value[..(maxLength - 3)] + "...";
 
     private static string FormatSize(long bytes) => bytes switch
     {
