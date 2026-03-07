@@ -115,11 +115,37 @@ internal sealed class EmailTab : View
 
         _readerBody.KeyDown += (_, e) =>
         {
-            if (e == Key.Esc)
+            if (e == Key.CursorLeft || e == Key.Esc)
             {
+                _attachmentList.CanFocus = false;
                 _readerBody.CanFocus = false;
                 _readerFrame.CanFocus = false;
+                _readerFrame.Title = "Reader";
                 _inboxList.SetFocus();
+                e.Handled = true;
+            }
+            else if (e == Key.CursorDown)
+            {
+                _readerBody.ScrollVertical(1);
+                UpdateReaderScrollIndicator();
+                e.Handled = true;
+            }
+            else if (e == Key.CursorUp)
+            {
+                _readerBody.ScrollVertical(-1);
+                UpdateReaderScrollIndicator();
+                e.Handled = true;
+            }
+            else if (e == Key.PageDown)
+            {
+                _readerBody.ScrollVertical(_readerBody.Viewport.Height);
+                UpdateReaderScrollIndicator();
+                e.Handled = true;
+            }
+            else if (e == Key.PageUp)
+            {
+                _readerBody.ScrollVertical(-_readerBody.Viewport.Height);
+                UpdateReaderScrollIndicator();
                 e.Handled = true;
             }
         };
@@ -136,9 +162,10 @@ internal sealed class EmailTab : View
 
         _attachmentList.KeyDown += (_, e) =>
         {
-            if (e == Key.Esc)
+            if (e == Key.CursorLeft || e == Key.Esc)
             {
                 _attachmentList.CanFocus = false;
+                _readerBody.CanFocus = false;
                 _readerFrame.CanFocus = false;
                 _inboxList.SetFocus();
                 e.Handled = true;
@@ -173,6 +200,7 @@ internal sealed class EmailTab : View
                 _readerFrame.CanFocus = true;
                 _readerBody.CanFocus = true;
                 _readerBody.SetFocus();
+                UpdateReaderScrollIndicator();
                 e.Handled = true;
             }
             else if (e == Key.CursorLeft && (_readerBody.HasFocus || _attachmentList.HasFocus))
@@ -522,6 +550,20 @@ internal sealed class EmailTab : View
     /// <summary>Defers SetFocus to the next main loop iteration.</summary>
     private void DeferFocusToInbox() =>
         _app.App?.Invoke(() => _inboxList.SetFocus());
+
+    private void UpdateReaderScrollIndicator()
+    {
+        var contentH = _readerBody.GetContentSize().Height;
+        var viewportH = _readerBody.Viewport.Height;
+        if (contentH <= viewportH)
+        {
+            _readerFrame.Title = "Reader";
+            return;
+        }
+        var top = _readerBody.Viewport.Y;
+        var pct = (int)(100.0 * (top + viewportH) / contentH);
+        _readerFrame.Title = $"Reader [{Math.Min(pct, 100)}%]";
+    }
 
     private static string StripZeroWidth(string value) =>
         string.Concat(value.Where(c => c is not ('\u200B' or '\u200C' or '\u200D' or '\uFEFF')));
