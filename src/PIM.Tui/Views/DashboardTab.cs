@@ -57,7 +57,6 @@ internal sealed class DashboardTab : View
         var today = DateTimeOffset.Now;
         var week = System.Globalization.ISOWeek.GetWeekOfYear(today.DateTime);
 
-        // Weather frame: date, current conditions, forecast
         _weatherFrame = new FrameView
         {
             Title = "Weather",
@@ -72,7 +71,6 @@ internal sealed class DashboardTab : View
         _forecastLabel = new Label { X = 0, Y = 3, Width = Dim.Fill(), Height = 5, Text = "" };
         _weatherFrame.Add(_dateLabel, _currentWeatherLabel, _forecastLabel);
 
-        // System frame: power, clocks
         _systemFrame = new FrameView
         {
             Title = "System",
@@ -88,7 +86,7 @@ internal sealed class DashboardTab : View
 
         _mailFrame = new FrameView
         {
-            Title = "Mail Overview",
+            Title = "Mail",
             X = Pos.Right(_weatherFrame),
             Y = 0,
             Width = Dim.Fill(),
@@ -99,7 +97,7 @@ internal sealed class DashboardTab : View
         {
             X = 0, Y = 0,
             Width = Dim.Fill(),
-            Height = Dim.Percent(40)
+            Height = Dim.Percent(30)
         };
 
         _recentMailList = new ListView
@@ -112,12 +110,10 @@ internal sealed class DashboardTab : View
 
         Add(_agendaFrame, _weatherFrame, _systemFrame, _mailFrame);
 
-        // Register Q-to-quit on ListViews so it fires before type-ahead search
         _app.RegisterQuitKey(_agendaList);
         _app.RegisterQuitKey(_accountList);
         _app.RegisterQuitKey(_recentMailList);
 
-        // Refresh system info every 60 seconds (deferred — App is null during construction)
         Initialized += (_, _) =>
         {
             _app.App!.AddTimeout(TimeSpan.FromSeconds(60), () =>
@@ -272,48 +268,53 @@ internal sealed class DashboardTab : View
                 _accounts.Select(a =>
                 {
                     var status = _app.IsAccountOnline(a.Id) ? "" : " [OFFLINE]";
-                    return $"{a.DisplayName} ({a.Type}){status}  U:{a.UnreadCount} F:{a.FlaggedCount}";
+                    var colorMarker = a.Color is not null ? "\u2588 " : "  ";
+                    return $"{colorMarker}{a.DisplayName} ({a.Type}){status}  U:{a.UnreadCount} F:{a.FlaggedCount}";
                 })));
 
-            _recentMailList.SetSource(new ObservableCollection<string>(
-                _recentMail.Select(m =>
-                {
-                    var indicator = m.IsRead ? " " : "*";
-                    var from = m.FromDisplayName ?? m.FromAddress;
-                    if (from.Length > 20) from = from[..17] + "...";
-                    var subject = m.Subject ?? "(no subject)";
-                    if (subject.Length > 30) subject = subject[..27] + "...";
-                    return $"{indicator} {from}: {subject}";
-                })));
+            // Two-line email preview: sender+date, then subject
+            var mailLines = new List<string>();
+            foreach (var m in _recentMail)
+            {
+                var indicator = m.IsRead ? " " : "\u25cf";
+                var from = m.FromDisplayName ?? m.FromAddress;
+                if (from.Length > 25) from = from[..22] + "...";
+                var date = m.Date.ToLocalTime().ToString("MMM d HH:mm");
+                var colorMarker = "\u2588";
+                mailLines.Add($"{indicator} {from}  {date} {colorMarker}");
+
+                var subject = m.Subject ?? "(no subject)";
+                if (subject.Length > 40) subject = subject[..37] + "...";
+                mailLines.Add($"    {subject}");
+            }
+
+            _recentMailList.SetSource(new ObservableCollection<string>(mailLines));
         });
     }
 
     internal void UpdateAccountStatus(string accountId, bool online)
     {
-        // Refresh account list to show updated online/offline status
         _app.App?.Invoke(() =>
         {
             _accountList.SetSource(new ObservableCollection<string>(
                 _accounts.Select(a =>
                 {
                     var status = _app.IsAccountOnline(a.Id) ? "" : " [OFFLINE]";
-                    return $"{a.DisplayName} ({a.Type}){status}  U:{a.UnreadCount} F:{a.FlaggedCount}";
+                    var colorMarker = a.Color is not null ? "\u2588 " : "  ";
+                    return $"{colorMarker}{a.DisplayName} ({a.Type}){status}  U:{a.UnreadCount} F:{a.FlaggedCount}";
                 })));
         });
     }
 
-    // Only emoji verified in sandbox/emoji_test to have correct column alignment.
-    // Many emoji (VS16, some supplementary plane) cause Terminal.Gui width mismatches.
-    // See CLAUDE.md and sandbox/emoji_test/ for details.
     private static string WeatherEmoji(string condition) => condition switch
     {
-        "Clear" or "Mainly Clear" => "\U0001f31e",  // 🌞 sun face
-        "Partly Cloudy" => "\u26c5",                 // ⛅ partly cloudy
-        "Overcast" or "Fog" => "\u2601",             // ☁ cloud (no VS16!)
-        "Drizzle" or "Rain" or "Rain Showers" => "\U0001f4a7", // 💧 droplet
-        "Freezing Drizzle" or "Freezing Rain" => "\U0001f9ca", // 🧊 ice
-        "Snow" or "Snow Grains" or "Snow Showers" => "\u2744", // ❄ snowflake (no VS16!)
-        "Thunderstorm" or "Thunderstorm with Hail" => "\u26c8", // ⛈ thunder cloud
+        "Clear" or "Mainly Clear" => "\U0001f31e",
+        "Partly Cloudy" => "\u26c5",
+        "Overcast" or "Fog" => "\u2601",
+        "Drizzle" or "Rain" or "Rain Showers" => "\U0001f4a7",
+        "Freezing Drizzle" or "Freezing Rain" => "\U0001f9ca",
+        "Snow" or "Snow Grains" or "Snow Showers" => "\u2744",
+        "Thunderstorm" or "Thunderstorm with Hail" => "\u26c8",
         _ => "  ",
     };
 }

@@ -162,6 +162,20 @@ public sealed class GoogleMailProvider : IMailProvider
         await _service!.Users.Messages.Modify(modify, UserId, messageId).ExecuteAsync(ct);
     }
 
+    public async Task MoveToJunkAsync(string messageId, CancellationToken ct)
+    {
+        EnsureService();
+        await _rateLimiter.WaitAsync(5, ct);
+
+        var modify = new ModifyMessageRequest
+        {
+            AddLabelIds = ["SPAM"],
+            RemoveLabelIds = ["INBOX"]
+        };
+        await _service!.Users.Messages.Modify(modify, UserId, messageId).ExecuteAsync(ct);
+        _logger.LogInformation("Moved Gmail message {MessageId} to SPAM", messageId);
+    }
+
     private async Task<SyncResult<EmailHeader>> FullSyncAsync(DateTimeOffset since, CancellationToken ct)
     {
         var upserted = new List<EmailHeader>();

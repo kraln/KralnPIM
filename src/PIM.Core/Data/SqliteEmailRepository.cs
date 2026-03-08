@@ -152,6 +152,15 @@ public sealed class SqliteEmailRepository : IEmailRepository
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
+    public async Task DeleteAsync(string messageId, CancellationToken ct = default)
+    {
+        using var conn = _factory.CreateConnection();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM email_headers WHERE message_id = @id";
+        cmd.Parameters.AddWithValue("@id", messageId);
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
     public async Task PurgeOlderThanAsync(DateTimeOffset cutoff, CancellationToken ct = default)
     {
         using var conn = _factory.CreateConnection();

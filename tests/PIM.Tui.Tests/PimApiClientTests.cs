@@ -63,7 +63,7 @@ public sealed class PimApiClientTests : IDisposable
     {
         var accounts = new List<AccountOverview>
         {
-            new("acct-1", "Personal", "Imap", true, 3, 1)
+            new("acct-1", "Personal", "Imap", true, 3, 1, null)
         };
 
         using var client = CreateClient(HttpStatusCode.OK, JsonSerializer.Serialize(accounts, _json));

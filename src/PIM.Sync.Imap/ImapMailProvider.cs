@@ -186,6 +186,38 @@ public sealed class ImapMailProvider : IMailProvider
             await inbox.RemoveFlagsAsync(uid, MessageFlags.Flagged, true, ct);
     }
 
+    public async Task MoveToJunkAsync(string messageId, CancellationToken ct)
+    {
+        EnsureAuthenticated();
+        var client = await _connectionManager.GetImapClientAsync(ct);
+        var inbox = client.Inbox;
+
+        if (!inbox.IsOpen || inbox.Access != FolderAccess.ReadWrite)
+            await inbox.OpenAsync(FolderAccess.ReadWrite, ct);
+
+        var uid = new UniqueId(uint.Parse(messageId));
+
+        // Try standard Junk folder names
+        IMailFolder? junkFolder = null;
+        foreach (var name in new[] { "Junk", "Spam", "Junk E-mail" })
+        {
+            try
+            {
+                junkFolder = await client.GetFolderAsync(name, ct);
+                break;
+            }
+            catch (FolderNotFoundException)
+            {
+            }
+        }
+
+        if (junkFolder is null)
+            throw new InvalidOperationException("No Junk/Spam folder found on this IMAP server.");
+
+        await inbox.MoveToAsync(uid, junkFolder, ct);
+        _logger.LogInformation("Moved message {MessageId} to {Folder}", messageId, junkFolder.FullName);
+    }
+
     private async Task<SyncResult<EmailHeader>> FullSyncAsync(
         IMailFolder inbox, DateTimeOffset since, CancellationToken ct)
     {

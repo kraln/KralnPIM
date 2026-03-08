@@ -20,13 +20,16 @@ internal sealed class TuiApp : Window
 {
     private readonly PimApiClient _api;
     private readonly PimWsClient _ws;
-    private readonly TabView _tabs;
     private readonly Label _statusLabel;
     private readonly DashboardTab _dashboardTab;
     private readonly CalendarTab _calendarTab;
     private readonly EmailTab _emailTab;
     private readonly Dictionary<string, bool> _accountStatus = new();
+    private readonly Dictionary<string, string?> _accountColors = new();
     private object? _statusClearTimeout;
+
+    private View _activeView;
+    private int _activeIndex; // 0=Dashboard, 1=Calendar, 2=Email
 
     public TuiApp(PimApiClient api, PimWsClient ws)
     {
@@ -38,57 +41,61 @@ internal sealed class TuiApp : Window
         _calendarTab = new CalendarTab(api, this);
         _emailTab = new EmailTab(api, this);
 
-        _tabs = new TabView
-        {
-            X = 0,
-            Y = 0,
-            Width = Dim.Fill(),
-            Height = Dim.Fill(1)
-        };
-
-        _tabs.AddTab(new Tab { DisplayText = "Dashboard", View = _dashboardTab }, false);
-        _tabs.AddTab(new Tab { DisplayText = "Calendar", View = _calendarTab }, false);
-        _tabs.AddTab(new Tab { DisplayText = "Email", View = _emailTab }, false);
-        _tabs.SelectedTab = _tabs.Tabs.First();
-
         _statusLabel = new Label
         {
             X = 0,
             Y = Pos.AnchorEnd(1),
             Width = Dim.Fill(),
             Height = 1,
-            Text = "Ready"
+            Text = "Ready  [1] Dashboard  [2] Calendar  [3] Email"
         };
 
-        Add(_tabs, _statusLabel);
+        // Position all views to fill the space above the status bar
+        foreach (var view in new View[] { _dashboardTab, _calendarTab, _emailTab })
+        {
+            view.X = 0;
+            view.Y = 0;
+            view.Width = Dim.Fill();
+            view.Height = Dim.Fill(1);
+        }
 
-        // Make the TabRow (tab strip header) non-focusable so Terminal.Gui's OnSubViewLayout
-        // can never move focus there. Tab switching is handled via Ctrl+1/2/3 or Ctrl+Left/Right.
-        var tabRow = _tabs.SubViews.FirstOrDefault(v => v.GetType().Name == "TabRow");
-        if (tabRow is not null)
-            tabRow.CanFocus = false;
+        // Start with dashboard visible
+        _activeView = _dashboardTab;
+        _activeIndex = 0;
+        _calendarTab.Visible = false;
+        _emailTab.Visible = false;
+
+        Add(_dashboardTab, _calendarTab, _emailTab, _statusLabel);
 
         // Remove the default Window Esc → QuitToplevel binding
         KeyBindings.Remove(Key.Esc);
 
-        // Global keybindings (fires when no child view handles the key)
+        // Global keybindings
         KeyDown += (_, e) =>
         {
-            if (e == Key.Tab && !IsEditing())
+            if (IsEditing()) return;
+
+            if (e == new Key('1'))
             {
-                var tabs = _tabs.Tabs.ToList();
-                var curIdx = tabs.IndexOf(_tabs.SelectedTab!);
-                var newIdx = (curIdx + 1) % tabs.Count;
-                _tabs.SelectedTab = tabs[newIdx];
-                tabs[newIdx].View?.SetFocus();
+                SwitchToView(0);
                 e.Handled = true;
             }
-            else if (e == Key.Q && !IsEditing())
+            else if (e == new Key('2'))
+            {
+                SwitchToView(1);
+                e.Handled = true;
+            }
+            else if (e == new Key('3'))
+            {
+                SwitchToView(2);
+                e.Handled = true;
+            }
+            else if (e == Key.Q)
             {
                 App?.RequestStop();
                 e.Handled = true;
             }
-            else if (e == new Key('?') && !IsEditing())
+            else if (e == new Key('?'))
             {
                 ShowHelp();
                 e.Handled = true;
@@ -117,8 +124,36 @@ internal sealed class TuiApp : Window
                 }
             });
             _ = _dashboardTab.LoadAsync(CancellationToken.None);
+            _ = LoadAccountColorsAsync();
         };
     }
+
+    private void SwitchToView(int index)
+    {
+        if (index == _activeIndex) return;
+
+        _activeView.Visible = false;
+        _activeIndex = index;
+        _activeView = index switch
+        {
+            1 => _calendarTab,
+            2 => _emailTab,
+            _ => _dashboardTab
+        };
+        _activeView.Visible = true;
+        _activeView.SetFocus();
+    }
+
+    private async Task LoadAccountColorsAsync()
+    {
+        var accounts = await SafeApiCallAsync(c => _api.GetAccountsAsync(c));
+        if (accounts is null) return;
+        foreach (var a in accounts)
+            _accountColors[a.Id] = a.Color;
+    }
+
+    internal string? GetAccountColor(string accountId) =>
+        _accountColors.GetValueOrDefault(accountId);
 
     /// <summary>
     /// Disables type-ahead and registers the Q-to-quit shortcut on a ListView.
@@ -158,7 +193,7 @@ internal sealed class TuiApp : Window
 
         _statusClearTimeout = App?.AddTimeout(TimeSpan.FromSeconds(5), () =>
         {
-            _statusLabel.Text = "Ready";
+            _statusLabel.Text = "Ready  [1] Dashboard  [2] Calendar  [3] Email";
             _statusClearTimeout = null;
             return false;
         });
@@ -199,15 +234,12 @@ internal sealed class TuiApp : Window
 
     private void ShowHelp()
     {
-        var activeTab = _tabs.SelectedTab;
-        var tabName = activeTab?.DisplayText ?? "";
-
-        var help = tabName switch
+        var help = _activeIndex switch
         {
-            "Calendar" => string.Join("\n", [
+            1 => string.Join("\n", [
                 "Calendar Keys:",
                 "",
-                "  Tab         Next tab",
+                "  1/2/3       Switch view",
                 "  Up/Down     Move cursor through time",
                 "  Left/Right  Move between day columns",
                 "              (shifts window at edges)",
@@ -218,10 +250,10 @@ internal sealed class TuiApp : Window
                 "  Q           Quit",
                 "  ?           This help"
             ]),
-            "Email" => string.Join("\n", [
+            2 => string.Join("\n", [
                 "Email Keys:",
                 "",
-                "  Tab         Next tab",
+                "  1/2/3       Switch view",
                 "  Up/Down     Navigate messages",
                 "  Right       Enter reader pane",
                 "  Left/Esc    Back to inbox list",
@@ -231,6 +263,7 @@ internal sealed class TuiApp : Window
                 "  F           Filter flagged",
                 "  Space       Toggle read/unread",
                 "  !           Toggle flag",
+                "  J           Mark as junk",
                 "  D           Download attachment",
                 "  /           Search",
                 "  Q           Quit",
@@ -239,7 +272,7 @@ internal sealed class TuiApp : Window
             _ => string.Join("\n", [
                 "Dashboard Keys:",
                 "",
-                "  Tab         Next tab",
+                "  1/2/3       Switch view",
                 "  Up/Down     Navigate lists",
                 "  Q           Quit",
                 "  ?           This help"

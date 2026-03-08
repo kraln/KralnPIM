@@ -37,7 +37,8 @@ internal static class MailEndpoints
                 a.DisplayName,
                 a.Type.ToString(),
                 tracker.IsOnline(a.Id),
-                0, 0)).ToList();
+                0, 0,
+                a.Color)).ToList();
             return Results.Ok(accounts);
         });
 
@@ -62,9 +63,20 @@ internal static class MailEndpoints
                 var provider = registry.GetMailProvider(header.AccountId);
                 if (provider is not null)
                 {
-                    var plainText = await provider.FetchBodyAsync(messageId, ct);
-                    await repo.UpsertBodyAsync(messageId, plainText, ct);
-                    body = new EmailBody(messageId, plainText);
+                    try
+                    {
+                        var plainText = await provider.FetchBodyAsync(messageId, ct);
+                        await repo.UpsertBodyAsync(messageId, plainText, ct);
+                        body = new EmailBody(messageId, plainText);
+                    }
+                    catch (Exception ex) when (
+                        ex.GetType().Name == "MessageNotFoundException")
+                    {
+                        // Message was moved/deleted on the server since last sync
+                        await repo.DeleteAsync(messageId, ct);
+                        return Results.Json(new ErrorResponse("Message no longer exists on server."),
+                            ServerJsonContext.Default.ErrorResponse, statusCode: 404);
+                    }
                 }
             }
 
@@ -117,6 +129,32 @@ internal static class MailEndpoints
 
             await provider.SendAsync(email, ct);
             return Results.Accepted();
+        });
+
+        group.MapPost("/{messageId}/junk", async (
+            string messageId,
+            IEmailRepository repo,
+            ProviderRegistry registry,
+            AccountStatusTracker tracker,
+            CancellationToken ct) =>
+        {
+            var header = await repo.GetHeaderAsync(messageId, ct);
+            if (header is null)
+                return Results.Json(new ErrorResponse("Message not found."),
+                    ServerJsonContext.Default.ErrorResponse, statusCode: 404);
+
+            if (!tracker.IsOnline(header.AccountId))
+                return Results.Json(new ErrorResponse($"Account '{header.AccountId}' is offline."),
+                    ServerJsonContext.Default.ErrorResponse, statusCode: 503);
+
+            var provider = registry.GetMailProvider(header.AccountId);
+            if (provider is null)
+                return Results.Json(new ErrorResponse("Provider not found."),
+                    ServerJsonContext.Default.ErrorResponse, statusCode: 404);
+
+            await provider.MoveToJunkAsync(messageId, ct);
+            await repo.DeleteAsync(messageId, ct);
+            return Results.Ok();
         });
 
         group.MapGet("/attachment/{messageId}/{filename}", async (

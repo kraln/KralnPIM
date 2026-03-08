@@ -31,13 +31,15 @@ public sealed record AccountConfig(
     string? TenantId,
     List<CalendarSourceConfig>? Calendars,
     bool? IgnoreSslErrors = null,
-    string? CalDavUrl = null
+    string? CalDavUrl = null,
+    string? Color = null
 );
 
 public sealed record CalendarSourceConfig(
     string Id,
     CalendarType Type,
-    string? Url
+    string? Url,
+    string? Color = null
 );
 
 public sealed record UiConfig(

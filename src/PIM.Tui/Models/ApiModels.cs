@@ -12,7 +12,8 @@ public sealed record AccountOverview(
     string Type,
     bool Online,
     int UnreadCount,
-    int FlaggedCount);
+    int FlaggedCount,
+    string? Color);
 
 public sealed record DeepSearchRequest(string Query, string? Scope);
 

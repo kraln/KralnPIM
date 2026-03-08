@@ -12,4 +12,5 @@ public interface IMailProvider
     Task SendAsync(OutboundEmail email, CancellationToken ct);
     Task<List<EmailHeader>> RemoteSearchAsync(string query, CancellationToken ct);
     Task SetFlagsAsync(string messageId, bool? isRead, bool? isFlagged, CancellationToken ct);
+    Task MoveToJunkAsync(string messageId, CancellationToken ct);
 }

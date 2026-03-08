@@ -9,6 +9,7 @@ namespace PIM.Tui.Views;
 /// <summary>
 /// Custom-drawn 4-day time grid with 15-minute slots.
 /// Shows events as colored blocks spanning their duration.
+/// Events are colored by their account/calendar color using Solarized palette.
 /// </summary>
 internal sealed class TimeGridView : View
 {
@@ -32,15 +33,17 @@ internal sealed class TimeGridView : View
     private DateTimeOffset _windowStart;
     private readonly CalendarEvent?[,] _grid = new CalendarEvent?[4, TotalSlots];
 
-    // Per-day all-day event summaries for the banner row
     private readonly string?[] _allDayLabels = new string?[4];
     private bool _hasAllDay;
     private int HeaderRows => _hasAllDay ? BaseHeaderRows + 1 : BaseHeaderRows;
 
-    // Per-day sun times: _sunSlots[day] = (sunriseSlot, sunsetSlot), -1 if unavailable
     private readonly (int sunrise, int sunset)[] _sunSlots = [(-1, -1), (-1, -1), (-1, -1), (-1, -1)];
-    // Per-day forecast summary for header row (e.g. "Rain 18/12")
     private readonly string?[] _forecastLabels = new string?[4];
+
+    // Per-account color attributes
+    private readonly Dictionary<string, GuiAttribute> _accountEventAttrs = new();
+    private readonly Dictionary<string, GuiAttribute> _accountCursorAttrs = new();
+    private int _nextPaletteIdx;
 
     public TimeGridView(
         TuiApp app,
@@ -66,6 +69,7 @@ internal sealed class TimeGridView : View
     internal void SetEvents(DateTimeOffset windowStart, List<CalendarEvent> events)
     {
         _windowStart = windowStart;
+        EnsureAccountColors(events);
         RebuildGrid(events);
         SetNeedsDraw();
     }
@@ -105,13 +109,27 @@ internal sealed class TimeGridView : View
         return day.AddMinutes(_cursorSlot * 15);
     }
 
+    private void EnsureAccountColors(List<CalendarEvent> events)
+    {
+        foreach (var evt in events)
+        {
+            if (_accountEventAttrs.ContainsKey(evt.AccountId)) continue;
+
+            var configColor = _app.GetAccountColor(evt.AccountId);
+            var bg = configColor is not null
+                ? Sol.ParseHex(configColor)
+                : Sol.AccountPalette[_nextPaletteIdx++ % Sol.AccountPalette.Length];
+            _accountEventAttrs[evt.AccountId] = Sol.EventAttr(bg);
+            _accountCursorAttrs[evt.AccountId] = Sol.EventCursorAttr(bg);
+        }
+    }
+
     private void RebuildGrid(List<CalendarEvent> events)
     {
         Array.Clear(_grid);
         Array.Clear(_allDayLabels);
         _hasAllDay = false;
 
-        // Collect all-day labels per day
         var allDayPerDay = new List<string>[4];
         for (var i = 0; i < 4; i++) allDayPerDay[i] = [];
 
@@ -172,8 +190,7 @@ internal sealed class TimeGridView : View
 
     protected override bool OnDrawingContent(DrawContext? context)
     {
-        // Clear stale content
-        SetAttributeForRole(VisualRole.Normal);
+        SetAttribute(Sol.Normal);
         for (var r = 0; r < Viewport.Height; r++)
         {
             Move(0, r);
@@ -188,47 +205,55 @@ internal sealed class TimeGridView : View
         var colWidth = (width - TimeGutterWidth - SeparatorCount) / 4;
         if (colWidth < 3) colWidth = 3;
 
-        var eventAttr = new GuiAttribute(StandardColor.White, StandardColor.Blue);
-        var cursorEventAttr = new GuiAttribute(StandardColor.Yellow, StandardColor.Blue);
-        var nowLineAttr = new GuiAttribute(StandardColor.BrightRed, StandardColor.Black);
-        var sunLineAttr = new GuiAttribute(StandardColor.Yellow, StandardColor.Black);
-        var forecastAttr = new GuiAttribute(StandardColor.Cyan, StandardColor.Black);
+        var defaultEventAttr = Sol.EventAttr(Sol.Blue);
+        var defaultCursorEventAttr = Sol.EventCursorAttr(Sol.Blue);
 
-        // Pre-compute 'now' marker
         var now = DateTimeOffset.Now;
         var nowSlot = now.Hour * SlotsPerHour + now.Minute / 15;
         var todayDate = now.Date;
 
         // Row 0: day headers
         Move(0, 0);
-        SetAttributeForRole(VisualRole.HotNormal);
+        SetAttribute(Sol.Heading);
         AddStr(new string(' ', TimeGutterWidth));
+        SetAttribute(Sol.Dimmed);
         AddRune('|');
         for (var day = 0; day < 4; day++)
         {
             var dayDate = _windowStart.AddDays(day);
+            var isToday = dayDate.LocalDateTime.Date == todayDate;
+            SetAttribute(isToday ? Sol.Heading : Sol.Emphasis);
             AddStr(PadCenter($"{dayDate:ddd d}", colWidth));
-            if (day < 3) AddRune('|');
+            if (day < 3)
+            {
+                SetAttribute(Sol.Dimmed);
+                AddRune('|');
+            }
         }
 
         // Row 1: forecast labels
         Move(0, 1);
-        SetAttribute(forecastAttr);
+        SetAttribute(Sol.Forecast);
         AddStr(new string(' ', TimeGutterWidth));
+        SetAttribute(Sol.Dimmed);
         AddRune('|');
         for (var day = 0; day < 4; day++)
         {
+            SetAttribute(Sol.Forecast);
             var label = _forecastLabels[day] ?? "";
             AddStr(PadCenter(label, colWidth));
-            if (day < 3) AddRune('|');
+            if (day < 3)
+            {
+                SetAttribute(Sol.Dimmed);
+                AddRune('|');
+            }
         }
 
         // Row 2 (conditional): all-day banner
         if (_hasAllDay)
         {
-            var allDayAttr = new GuiAttribute(StandardColor.White, StandardColor.DarkGray);
             Move(0, BaseHeaderRows);
-            SetAttribute(allDayAttr);
+            SetAttribute(Sol.AllDay);
             AddStr(PadCenter("", TimeGutterWidth));
             AddRune('|');
             for (var day = 0; day < 4; day++)
@@ -239,7 +264,7 @@ internal sealed class TimeGridView : View
             }
         }
 
-        // Rows 2+/3+: time slots
+        // Time slot rows
         var visibleSlots = height - HeaderRows;
         for (var row = 0; row < visibleSlots; row++)
         {
@@ -250,7 +275,6 @@ internal sealed class TimeGridView : View
             var hour = slot / SlotsPerHour;
             var minute = (slot % SlotsPerHour) * 15;
 
-            // Check if 'now' line applies to any visible day column
             var isNowLine = false;
             for (var day = 0; day < 4; day++)
             {
@@ -263,28 +287,27 @@ internal sealed class TimeGridView : View
             string timeLabel;
             if (isNowLine && minute != 0 && minute != 30)
             {
-                SetAttribute(nowLineAttr);
+                SetAttribute(Sol.NowLine);
                 timeLabel = " now  ";
             }
             else if (minute == 0)
             {
-                SetAttributeForRole(VisualRole.Normal);
+                SetAttribute(Sol.Emphasis);
                 timeLabel = $"{hour:D2}:{minute:D2} ";
             }
             else if (minute == 30)
             {
-                SetAttributeForRole(VisualRole.Normal);
+                SetAttribute(Sol.Dimmed);
                 timeLabel = "  :30 ";
             }
             else
             {
-                SetAttributeForRole(VisualRole.Normal);
+                SetAttribute(Sol.Normal);
                 timeLabel = "      ";
             }
             AddStr(timeLabel);
 
-            // Gutter separator
-            SetAttributeForRole(VisualRole.Normal);
+            SetAttribute(Sol.Dimmed);
             AddRune('|');
 
             // Day columns
@@ -298,44 +321,45 @@ internal sealed class TimeGridView : View
 
                 if (evt is not null)
                 {
-                    SetAttribute(isCursor ? cursorEventAttr : eventAttr);
+                    var evtAttr = _accountEventAttrs.GetValueOrDefault(evt.AccountId, defaultEventAttr);
+                    var curAttr = _accountCursorAttrs.GetValueOrDefault(evt.AccountId, defaultCursorEventAttr);
+                    SetAttribute(isCursor ? curAttr : evtAttr);
                     var isFirstSlot = slot == 0 || _grid[day, slot - 1] != evt;
                     var text = isFirstSlot ? evt.Summary : "";
                     AddStr(Fit(text, colWidth));
                 }
                 else if (isCursor)
                 {
-                    SetAttributeForRole(VisualRole.Focus);
+                    SetAttribute(Sol.Cursor);
                     AddStr(new string(' ', colWidth));
                 }
                 else if (isNowLine && dayIsToday)
                 {
-                    SetAttribute(nowLineAttr);
+                    SetAttribute(Sol.NowLine);
                     AddStr(new string('-', colWidth));
                 }
                 else if (isSunrise || isSunset)
                 {
-                    SetAttribute(sunLineAttr);
+                    SetAttribute(Sol.SunMarker);
                     var label = isSunrise ? "\U0001f305" : "\U0001f307";
                     AddStr(Fit(label, colWidth));
                 }
                 else
                 {
-                    SetAttributeForRole(VisualRole.Normal);
+                    SetAttribute(Sol.Normal);
                     AddStr(new string(' ', colWidth));
                 }
 
-                // Column separator
                 if (day < 3)
                 {
                     if (isNowLine && dayIsToday)
                     {
-                        SetAttribute(nowLineAttr);
+                        SetAttribute(Sol.NowLine);
                         AddRune('-');
                     }
                     else
                     {
-                        SetAttributeForRole(VisualRole.Normal);
+                        SetAttribute(Sol.Dimmed);
                         AddRune('|');
                     }
                 }
@@ -431,7 +455,6 @@ internal sealed class TimeGridView : View
             _app.App?.RequestStop();
             e.Handled = true;
         }
-        // Let '?' bubble up to TuiApp's global handler
     }
 
     internal void JumpToCurrentTime()

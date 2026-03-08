@@ -73,7 +73,8 @@ public static class ConfigLoader
         var calendars = dto.Calendars?.Select(c => new CalendarSourceConfig(
             c.Id ?? "",
             ParseCalendarType(c.Type),
-            c.Url
+            c.Url,
+            c.Color
         )).ToList();
 
         return new AccountConfig(
@@ -91,7 +92,8 @@ public static class ConfigLoader
             dto.TenantId,
             calendars,
             dto.IgnoreSslErrors,
-            dto.CalDavUrl
+            dto.CalDavUrl,
+            dto.Color
         );
     }
 
@@ -217,6 +219,7 @@ public static class ConfigLoader
         public List<CalendarDto>? Calendars { get; set; }
         public bool? IgnoreSslErrors { get; set; }
         public string? CalDavUrl { get; set; }
+        public string? Color { get; set; }
     }
 
     private sealed class CalendarDto
@@ -224,6 +227,7 @@ public static class ConfigLoader
         public string? Id { get; set; }
         public string? Type { get; set; }
         public string? Url { get; set; }
+        public string? Color { get; set; }
     }
 
     private sealed class UiDto

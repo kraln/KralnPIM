@@ -147,6 +147,17 @@ public sealed class GraphMailProvider : IMailProvider
         await _client!.Me.Messages[messageId].PatchAsync(update, cancellationToken: ct);
     }
 
+    public async Task MoveToJunkAsync(string messageId, CancellationToken ct)
+    {
+        EnsureClient();
+        await _client!.Me.Messages[messageId].Move
+            .PostAsync(new Microsoft.Graph.Me.Messages.Item.Move.MovePostRequestBody
+            {
+                DestinationId = "junkemail"
+            }, cancellationToken: ct);
+        _logger.LogInformation("Moved Graph message {MessageId} to junkemail", messageId);
+    }
+
     private async Task<SyncResult<EmailHeader>> FullSyncAsync(DateTimeOffset since, CancellationToken ct)
     {
         var upserted = new List<EmailHeader>();

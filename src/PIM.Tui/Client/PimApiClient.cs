@@ -62,6 +62,13 @@ public sealed class PimApiClient : IDisposable
         response.EnsureSuccessStatusCode();
     }
 
+    public async Task MoveToJunkAsync(string messageId, CancellationToken ct = default)
+    {
+        var url = $"/api/mail/{Uri.EscapeDataString(messageId)}/junk";
+        using var response = await _http.PostAsync(url, null, ct);
+        response.EnsureSuccessStatusCode();
+    }
+
     public async Task<AttachmentDownloadResult?> DownloadAttachmentAsync(
         string messageId, string filename, CancellationToken ct = default) =>
         await GetAsync<AttachmentDownloadResult>(
