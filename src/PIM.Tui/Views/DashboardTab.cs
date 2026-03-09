@@ -1,10 +1,12 @@
-using System.Collections.ObjectModel;
 using PIM.Core.Models;
 using PIM.Tui.Client;
 using PIM.Tui.Models;
 using Terminal.Gui.App;
+using Terminal.Gui.Drawing;
+using Terminal.Gui.Input;
 using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
+using GuiAttribute = Terminal.Gui.Drawing.Attribute;
 
 namespace PIM.Tui.Views;
 
@@ -18,14 +20,14 @@ internal sealed class DashboardTab : View
     private readonly FrameView _systemFrame;
     private readonly FrameView _mailFrame;
 
-    private readonly ListView _agendaList;
+    private readonly AgendaListView _agendaList;
     private readonly Label _dateLabel;
     private readonly Label _currentWeatherLabel;
     private readonly Label _forecastLabel;
     private readonly Label _powerLabel;
     private readonly Label _clockLabel;
-    private readonly ListView _accountList;
-    private readonly ListView _recentMailList;
+    private readonly AccountListView _accountList;
+    private readonly EmailListView _recentMailList;
 
     private List<CalendarEvent> _todayEvents = [];
     private List<AccountOverview> _accounts = [];
@@ -46,7 +48,7 @@ internal sealed class DashboardTab : View
             Height = Dim.Fill()
         };
 
-        _agendaList = new ListView
+        _agendaList = new AgendaListView(app)
         {
             X = 0, Y = 0,
             Width = Dim.Fill(),
@@ -93,19 +95,20 @@ internal sealed class DashboardTab : View
             Height = Dim.Fill()
         };
 
-        _accountList = new ListView
+        _accountList = new AccountListView(app)
         {
             X = 0, Y = 0,
             Width = Dim.Fill(),
-            Height = Dim.Percent(30)
+            Height = 1 // sized dynamically in UpdateAccountList
         };
 
-        _recentMailList = new ListView
+        _recentMailList = new EmailListView(app)
         {
             X = 0, Y = Pos.Bottom(_accountList),
             Width = Dim.Fill(),
             Height = Dim.Fill()
         };
+        _accountList.FilterChanged += ApplyMailFilter;
         _mailFrame.Add(_accountList, _recentMailList);
 
         Add(_agendaFrame, _weatherFrame, _systemFrame, _mailFrame);
@@ -145,31 +148,7 @@ internal sealed class DashboardTab : View
         _app.App?.Invoke(() =>
         {
             _agendaFrame.Title = "Agenda";
-            var lines = new List<string>();
-            var currentDate = (DateTime?)null;
-
-            foreach (var e in _todayEvents)
-            {
-                var eventDate = e.Start.ToLocalTime().Date;
-                if (currentDate != eventDate)
-                {
-                    if (lines.Count > 0) lines.Add("");
-                    var dayLabel = eventDate == today
-                        ? $"Today - {eventDate:ddd MMM d}"
-                        : $"{eventDate:ddd MMM d}";
-                    lines.Add(dayLabel);
-                    currentDate = eventDate;
-                }
-
-                lines.Add(e.IsAllDay
-                    ? $"  All day  {e.Summary}"
-                    : $"  {e.Start.ToLocalTime():HH:mm}  {e.Summary}");
-            }
-
-            if (lines.Count == 0)
-                lines.Add($"Today - {today:ddd MMM d}");
-
-            _agendaList.SetSource(new ObservableCollection<string>(lines));
+            _agendaList.SetRows(AgendaListView.BuildRows(_todayEvents, today));
         });
     }
 
@@ -249,8 +228,12 @@ internal sealed class DashboardTab : View
 
     internal async Task RefreshMailOverviewAsync(CancellationToken ct)
     {
+        // Fetch enough emails to fill the available space (2 rows per email)
+        var mailHeight = Math.Max(10, _recentMailList.Viewport.Height);
+        var limit = Math.Max(10, mailHeight / 2);
+
         var accountsTask = _app.SafeApiCallAsync(c => _api.GetAccountsAsync(c), ct);
-        var mailTask = _app.SafeApiCallAsync(c => _api.ListMailAsync(limit: 10, ct: c), ct);
+        var mailTask = _app.SafeApiCallAsync(c => _api.ListMailAsync(limit: limit, ct: c), ct);
 
         await Task.WhenAll(accountsTask, mailTask);
 
@@ -264,46 +247,29 @@ internal sealed class DashboardTab : View
 
         _app.App?.Invoke(() =>
         {
-            _accountList.SetSource(new ObservableCollection<string>(
-                _accounts.Select(a =>
-                {
-                    var status = _app.IsAccountOnline(a.Id) ? "" : " [OFFLINE]";
-                    var colorMarker = a.Color is not null ? "\u2588 " : "  ";
-                    return $"{colorMarker}{a.DisplayName} ({a.Type}){status}  U:{a.UnreadCount} F:{a.FlaggedCount}";
-                })));
-
-            // Two-line email preview: sender+date, then subject
-            var mailLines = new List<string>();
-            foreach (var m in _recentMail)
-            {
-                var indicator = m.IsRead ? " " : "\u25cf";
-                var from = m.FromDisplayName ?? m.FromAddress;
-                if (from.Length > 25) from = from[..22] + "...";
-                var date = m.Date.ToLocalTime().ToString("MMM d HH:mm");
-                var colorMarker = "\u2588";
-                mailLines.Add($"{indicator} {from}  {date} {colorMarker}");
-
-                var subject = m.Subject ?? "(no subject)";
-                if (subject.Length > 40) subject = subject[..37] + "...";
-                mailLines.Add($"    {subject}");
-            }
-
-            _recentMailList.SetSource(new ObservableCollection<string>(mailLines));
+            UpdateAccountList();
+            ApplyMailFilter();
         });
     }
 
     internal void UpdateAccountStatus(string accountId, bool online)
     {
-        _app.App?.Invoke(() =>
-        {
-            _accountList.SetSource(new ObservableCollection<string>(
-                _accounts.Select(a =>
-                {
-                    var status = _app.IsAccountOnline(a.Id) ? "" : " [OFFLINE]";
-                    var colorMarker = a.Color is not null ? "\u2588 " : "  ";
-                    return $"{colorMarker}{a.DisplayName} ({a.Type}){status}  U:{a.UnreadCount} F:{a.FlaggedCount}";
-                })));
-        });
+        _app.App?.Invoke(UpdateAccountList);
+    }
+
+    private void UpdateAccountList()
+    {
+        _accountList.SetAccounts(_accounts);
+        _accountList.Height = Math.Max(1, _accounts.Count);
+    }
+
+    private void ApplyMailFilter()
+    {
+        var disabled = _accountList.DisabledAccountIds;
+        var filtered = disabled.Count > 0
+            ? _recentMail.Where(m => !disabled.Contains(m.AccountId)).ToList()
+            : _recentMail;
+        _recentMailList.SetEmails(filtered);
     }
 
     private static string WeatherEmoji(string condition) => condition switch
@@ -317,4 +283,137 @@ internal sealed class DashboardTab : View
         "Thunderstorm" or "Thunderstorm with Hail" => "\u26c8",
         _ => "  ",
     };
+
+    /// <summary>
+    /// Compact custom-drawn account list with per-account foreground colors.
+    /// Accounts can be toggled on/off to filter the email list.
+    /// </summary>
+    private sealed class AccountListView : View
+    {
+        private readonly TuiApp _app;
+        private List<AccountOverview> _accounts = [];
+        private readonly Dictionary<string, Color> _accountColors = new();
+        private readonly HashSet<string> _disabledAccounts = new();
+        private int _selectedIndex;
+
+        public event Action? FilterChanged;
+
+        public AccountListView(TuiApp app)
+        {
+            _app = app;
+            CanFocus = true;
+            KeyDown += HandleKeyDown;
+            MouseEvent += HandleMouseEvent;
+        }
+
+        public HashSet<string> DisabledAccountIds => _disabledAccounts;
+
+        public void SetAccounts(List<AccountOverview> accounts)
+        {
+            _accounts = accounts;
+            if (_selectedIndex >= _accounts.Count)
+                _selectedIndex = Math.Max(0, _accounts.Count - 1);
+            EnsureColors();
+            SetNeedsDraw();
+        }
+
+        private void EnsureColors()
+        {
+            foreach (var a in _accounts)
+            {
+                if (_accountColors.ContainsKey(a.Id)) continue;
+                _accountColors[a.Id] = _app.GetOrAssignAccountColor(a.Id);
+            }
+        }
+
+        private void ToggleSelected()
+        {
+            if (_selectedIndex < 0 || _selectedIndex >= _accounts.Count) return;
+            var id = _accounts[_selectedIndex].Id;
+            if (!_disabledAccounts.Remove(id))
+                _disabledAccounts.Add(id);
+            SetNeedsDraw();
+            FilterChanged?.Invoke();
+        }
+
+        private void HandleKeyDown(object? sender, Key e)
+        {
+            if (e == Key.CursorUp && _selectedIndex > 0)
+            {
+                _selectedIndex--;
+                SetNeedsDraw();
+                e.Handled = true;
+            }
+            else if (e == Key.CursorDown && _selectedIndex < _accounts.Count - 1)
+            {
+                _selectedIndex++;
+                SetNeedsDraw();
+                e.Handled = true;
+            }
+            else if (e == Key.Space || e == Key.Enter)
+            {
+                ToggleSelected();
+                e.Handled = true;
+            }
+        }
+
+        private void HandleMouseEvent(object? sender, Mouse e)
+        {
+            if (e.Flags.HasFlag(MouseFlags.LeftButtonPressed) && e.Position is { } pos)
+            {
+                if (pos.Y >= 0 && pos.Y < _accounts.Count)
+                {
+                    _selectedIndex = pos.Y;
+                    ToggleSelected();
+                }
+                if (!HasFocus) SetFocus();
+                e.Handled = true;
+            }
+        }
+
+        protected override bool OnDrawingContent(DrawContext? context)
+        {
+            var width = Viewport.Width;
+            var height = Viewport.Height;
+
+            SetAttribute(Sol.Normal);
+            for (var r = 0; r < height; r++)
+            {
+                Move(0, r);
+                AddStr(new string(' ', width));
+            }
+
+            for (var i = 0; i < _accounts.Count && i < height; i++)
+            {
+                var a = _accounts[i];
+                var fg = _accountColors.GetValueOrDefault(a.Id, Sol.Base0);
+                var disabled = _disabledAccounts.Contains(a.Id);
+                var selected = i == _selectedIndex && HasFocus;
+                var bg = selected ? Sol.Base02 : Sol.Base03;
+
+                Move(0, i);
+
+                // Indicator: ● enabled, ○ disabled, in account color (dimmed if disabled)
+                var indicatorFg = disabled ? Sol.Base01 : fg;
+                SetAttribute(new GuiAttribute(indicatorFg, bg));
+                AddStr(disabled ? "\u25cb " : "\u25cf ");
+
+                // Account details — dimmed if disabled
+                var textFg = disabled ? Sol.Base01 : fg;
+                SetAttribute(new GuiAttribute(textFg, bg));
+
+                var status = _app.IsAccountOnline(a.Id) ? "" : " [OFFLINE]";
+                var text = $"{a.DisplayName} ({a.Type}){status}  U:{a.UnreadCount} F:{a.FlaggedCount}";
+                if (text.Length > width - 2)
+                    text = text[..(width - 2)];
+                AddStr(text);
+
+                // Pad rest of line with bg color for selected highlight
+                var remaining = width - 2 - text.Length;
+                if (remaining > 0) AddStr(new string(' ', remaining));
+            }
+
+            return true;
+        }
+    }
 }

@@ -29,6 +29,8 @@ internal sealed class TuiApp : Window
     private readonly EmailTab _emailTab;
     private readonly Dictionary<string, bool> _accountStatus = new();
     private readonly Dictionary<string, string?> _accountColors = new();
+    private readonly Dictionary<string, Color> _resolvedAccountColors = new();
+    private int _nextPaletteIdx;
     private object? _statusClearTimeout;
 
     private View _activeView;
@@ -171,12 +173,42 @@ internal sealed class TuiApp : Window
         _accountColors.GetValueOrDefault(accountId);
 
     /// <summary>
+    /// Returns a stable Color for the given account, using the configured hex color
+    /// if available, otherwise assigning from the Solarized palette round-robin.
+    /// Both AccountListView and EmailListView must call this to stay in sync.
+    /// </summary>
+    internal Color GetOrAssignAccountColor(string accountId)
+    {
+        if (_resolvedAccountColors.TryGetValue(accountId, out var cached))
+            return cached;
+
+        var hex = GetAccountColor(accountId);
+        var color = hex is not null
+            ? Sol.ParseHex(hex)
+            : Sol.AccountPalette[_nextPaletteIdx++ % Sol.AccountPalette.Length];
+        _resolvedAccountColors[accountId] = color;
+        return color;
+    }
+
+    /// <summary>
     /// Disables type-ahead and registers the Q-to-quit shortcut on a ListView.
     /// </summary>
     internal void RegisterQuitKey(ListView list)
     {
         list.KeystrokeNavigator.Matcher = new NoTypeAheadMatcher();
         list.KeyDown += (_, e) =>
+        {
+            if (e == Key.Q && !IsEditing())
+            {
+                App?.RequestStop();
+                e.Handled = true;
+            }
+        };
+    }
+
+    internal void RegisterQuitKey(View view)
+    {
+        view.KeyDown += (_, e) =>
         {
             if (e == Key.Q && !IsEditing())
             {

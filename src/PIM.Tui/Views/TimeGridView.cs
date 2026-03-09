@@ -8,7 +8,7 @@ namespace PIM.Tui.Views;
 
 /// <summary>
 /// Custom-drawn 4-day time grid with 15-minute slots.
-/// Shows events as colored blocks spanning their duration.
+/// Shows events as colored blocks with half-block caps for tight visual boundaries.
 /// Events are colored by their account/calendar color using Solarized palette.
 /// </summary>
 internal sealed class TimeGridView : View
@@ -40,11 +40,10 @@ internal sealed class TimeGridView : View
     private readonly (int sunrise, int sunset)[] _sunSlots = [(-1, -1), (-1, -1), (-1, -1), (-1, -1)];
     private readonly string?[] _forecastLabels = new string?[4];
 
-    // Per-account color attributes
+    // Per-account color attributes and raw bg colors (for half-block caps)
     private readonly Dictionary<string, GuiAttribute> _accountEventAttrs = new();
     private readonly Dictionary<string, GuiAttribute> _accountCursorAttrs = new();
-    private int _nextPaletteIdx;
-
+    private readonly Dictionary<string, Color> _accountBgColors = new();
     public TimeGridView(
         TuiApp app,
         Action<int> onWindowShift,
@@ -64,6 +63,7 @@ internal sealed class TimeGridView : View
         _windowStart = DateTimeOffset.Now.Date;
 
         KeyDown += HandleKeyDown;
+        MouseEvent += HandleMouseEvent;
     }
 
     internal void SetEvents(DateTimeOffset windowStart, List<CalendarEvent> events)
@@ -115,12 +115,10 @@ internal sealed class TimeGridView : View
         {
             if (_accountEventAttrs.ContainsKey(evt.AccountId)) continue;
 
-            var configColor = _app.GetAccountColor(evt.AccountId);
-            var bg = configColor is not null
-                ? Sol.ParseHex(configColor)
-                : Sol.AccountPalette[_nextPaletteIdx++ % Sol.AccountPalette.Length];
+            var bg = _app.GetOrAssignAccountColor(evt.AccountId);
             _accountEventAttrs[evt.AccountId] = Sol.EventAttr(bg);
             _accountCursorAttrs[evt.AccountId] = Sol.EventCursorAttr(bg);
+            _accountBgColors[evt.AccountId] = bg;
         }
     }
 
@@ -205,8 +203,9 @@ internal sealed class TimeGridView : View
         var colWidth = (width - TimeGutterWidth - SeparatorCount) / 4;
         if (colWidth < 3) colWidth = 3;
 
-        var defaultEventAttr = Sol.EventAttr(Sol.Blue);
-        var defaultCursorEventAttr = Sol.EventCursorAttr(Sol.Blue);
+        var defaultBg = Sol.Blue;
+        var defaultEventAttr = Sol.EventAttr(defaultBg);
+        var defaultCursorEventAttr = Sol.EventCursorAttr(defaultBg);
 
         var now = DateTimeOffset.Now;
         var nowSlot = now.Hour * SlotsPerHour + now.Minute / 15;
@@ -316,27 +315,50 @@ internal sealed class TimeGridView : View
                 var evt = _grid[day, slot];
                 var isCursor = slot == _cursorSlot && day == _cursorDay;
                 var dayIsToday = _windowStart.AddDays(day).LocalDateTime.Date == todayDate;
+                var isNowSlot = isNowLine && dayIsToday;
                 var isSunrise = _sunSlots[day].sunrise == slot;
                 var isSunset = _sunSlots[day].sunset == slot;
 
                 if (evt is not null)
                 {
+                    var evtBg = _accountBgColors.GetValueOrDefault(evt.AccountId, defaultBg);
                     var evtAttr = _accountEventAttrs.GetValueOrDefault(evt.AccountId, defaultEventAttr);
                     var curAttr = _accountCursorAttrs.GetValueOrDefault(evt.AccountId, defaultCursorEventAttr);
-                    SetAttribute(isCursor ? curAttr : evtAttr);
+
                     var isFirstSlot = slot == 0 || _grid[day, slot - 1] != evt;
-                    var text = isFirstSlot ? evt.Summary : "";
-                    AddStr(Fit(text, colWidth));
+                    var isLastSlot = slot == TotalSlots - 1 || _grid[day, slot + 1] != evt;
+
+                    if (isLastSlot && !isFirstSlot)
+                    {
+                        // Bottom cap: ▀ with event color on top, normal bg on bottom
+                        var capFg = isCursor ? Sol.Yellow : evtBg;
+                        var capBg = isCursor ? Sol.Base02 : Sol.Base03;
+                        SetAttribute(new GuiAttribute(capFg, capBg));
+                        AddStr(new string('\u2580', colWidth));
+                    }
+                    else
+                    {
+                        // First slot or middle slot or single-slot: full bg + text
+                        SetAttribute(isCursor ? curAttr : evtAttr);
+                        var text = isFirstSlot ? evt.Summary : "";
+                        AddStr(Fit(text, colWidth));
+                    }
+                }
+                else if (isCursor && isNowSlot)
+                {
+                    // Cursor on the now line: red dashes on highlighted bg
+                    SetAttribute(new GuiAttribute(Sol.Red, Sol.Base02));
+                    AddStr(new string('\u2500', colWidth));
                 }
                 else if (isCursor)
                 {
                     SetAttribute(Sol.Cursor);
                     AddStr(new string(' ', colWidth));
                 }
-                else if (isNowLine && dayIsToday)
+                else if (isNowSlot)
                 {
                     SetAttribute(Sol.NowLine);
-                    AddStr(new string('-', colWidth));
+                    AddStr(new string('\u2500', colWidth));
                 }
                 else if (isSunrise || isSunset)
                 {
@@ -352,10 +374,10 @@ internal sealed class TimeGridView : View
 
                 if (day < 3)
                 {
-                    if (isNowLine && dayIsToday)
+                    if (isNowSlot)
                     {
-                        SetAttribute(Sol.NowLine);
-                        AddRune('-');
+                        SetAttribute(isCursor ? new GuiAttribute(Sol.Red, Sol.Base02) : Sol.NowLine);
+                        AddRune('\u2500');
                     }
                     else
                     {
@@ -455,6 +477,85 @@ internal sealed class TimeGridView : View
             _app.App?.RequestStop();
             e.Handled = true;
         }
+    }
+
+    private void HandleMouseEvent(object? sender, Mouse e)
+    {
+        if (e.Flags.HasFlag(MouseFlags.LeftButtonPressed) && e.Position is { } pos)
+        {
+            // Map screen position to (day, slot)
+            var screenRow = pos.Y;
+            var screenCol = pos.X;
+
+            if (screenRow >= HeaderRows && screenCol > TimeGutterWidth)
+            {
+                var colOffset = screenCol - TimeGutterWidth - 1; // -1 for gutter separator
+                var colWidth = CalculateColWidth();
+                var day = colOffset / (colWidth + 1); // +1 for column separators
+                var slot = _scrollOffset + (screenRow - HeaderRows);
+
+                if (day >= 0 && day < 4 && slot >= 0 && slot < TotalSlots)
+                {
+                    _cursorDay = day;
+                    _cursorSlot = slot;
+                    EnsureCursorVisible();
+                    SetNeedsDraw();
+                }
+            }
+
+            if (!HasFocus) SetFocus();
+            e.Handled = true;
+        }
+        else if (e.Flags.HasFlag(MouseFlags.WheeledDown))
+        {
+            var jump = SlotsPerHour; // scroll by 1 hour
+            _scrollOffset = Math.Min(_scrollOffset + jump,
+                Math.Max(0, TotalSlots - (Viewport.Height - HeaderRows)));
+            _cursorSlot = Math.Clamp(_cursorSlot + jump, 0, TotalSlots - 1);
+            SetNeedsDraw();
+            e.Handled = true;
+        }
+        else if (e.Flags.HasFlag(MouseFlags.WheeledUp))
+        {
+            var jump = SlotsPerHour;
+            _scrollOffset = Math.Max(0, _scrollOffset - jump);
+            _cursorSlot = Math.Clamp(_cursorSlot - jump, 0, TotalSlots - 1);
+            SetNeedsDraw();
+            e.Handled = true;
+        }
+        else if (e.Flags.HasFlag(MouseFlags.LeftButtonDoubleClicked) && e.Position is { } dpos)
+        {
+            // Double-click: edit event or create new
+            var screenRow = dpos.Y;
+            var screenCol = dpos.X;
+
+            if (screenRow >= HeaderRows && screenCol > TimeGutterWidth)
+            {
+                var colOffset = screenCol - TimeGutterWidth - 1;
+                var colWidth = CalculateColWidth();
+                var day = colOffset / (colWidth + 1);
+                var slot = _scrollOffset + (screenRow - HeaderRows);
+
+                if (day >= 0 && day < 4 && slot >= 0 && slot < TotalSlots)
+                {
+                    _cursorDay = day;
+                    _cursorSlot = slot;
+                    var evt = GetEventAtCursor();
+                    if (evt is not null)
+                        _onEditEvent(evt);
+                    else
+                        _onNewEvent(GetCursorDateTime());
+                }
+            }
+            e.Handled = true;
+        }
+    }
+
+    private int CalculateColWidth()
+    {
+        var width = Viewport.Width;
+        var colWidth = (width - TimeGutterWidth - SeparatorCount) / 4;
+        return Math.Max(3, colWidth);
     }
 
     internal void JumpToCurrentTime()

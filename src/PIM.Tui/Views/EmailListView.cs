@@ -19,7 +19,6 @@ internal sealed class EmailListView : View
 
     // Cached per-account indicator attributes (normal + selected variants)
     private readonly Dictionary<string, (GuiAttribute normal, GuiAttribute selected)> _accountAttrs = new();
-    private int _nextPaletteIdx;
 
     public event Action<EmailHeader?>? SelectionChanged;
 
@@ -286,10 +285,7 @@ internal sealed class EmailListView : View
         {
             if (_accountAttrs.ContainsKey(email.AccountId)) continue;
 
-            var hex = _app.GetAccountColor(email.AccountId);
-            var fg = hex is not null
-                ? Sol.ParseHex(hex)
-                : Sol.AccountPalette[_nextPaletteIdx++ % Sol.AccountPalette.Length];
+            var fg = _app.GetOrAssignAccountColor(email.AccountId);
 
             _accountAttrs[email.AccountId] = (
                 normal: new GuiAttribute(fg, Sol.Base03),
@@ -304,7 +300,7 @@ internal sealed class EmailListView : View
             return pair;
 
         // Fallback (shouldn't normally happen after EnsureAccountColors)
-        var fg = Sol.AccountPalette[Math.Abs(accountId.GetHashCode()) % Sol.AccountPalette.Length];
+        var fg = _app.GetOrAssignAccountColor(accountId);
         var result = (new GuiAttribute(fg, Sol.Base03), new GuiAttribute(fg, Sol.Base02));
         _accountAttrs[accountId] = result;
         return result;

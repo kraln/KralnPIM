@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using PIM.Core.Models;
 using PIM.Tui.Client;
 using Terminal.Gui.Input;
@@ -14,7 +13,7 @@ internal sealed class CalendarTab : View
 
     private readonly FrameView _agendaFrame;
     private readonly FrameView _timelineFrame;
-    private readonly ListView _agendaList;
+    private readonly AgendaListView _agendaList;
     private readonly TimeGridView _gridView;
 
     private EventEditorView? _editorView;
@@ -38,7 +37,7 @@ internal sealed class CalendarTab : View
             Height = Dim.Fill()
         };
 
-        _agendaList = new ListView
+        _agendaList = new AgendaListView(app)
         {
             X = 0, Y = 0,
             Width = Dim.Fill(),
@@ -84,16 +83,15 @@ internal sealed class CalendarTab : View
         Add(_agendaFrame, _timelineFrame);
 
         // Agenda list key handlers
+        _agendaList.EventSelected += evt =>
+        {
+            if (_editorView is null) OpenEditor(evt);
+        };
         _agendaList.KeyDown += (_, e) =>
         {
             if (e == Key.N && _editorView is null)
             {
                 OpenEditor(null, DateTimeOffset.Now);
-                e.Handled = true;
-            }
-            else if (e == Key.Enter && _editorView is null)
-            {
-                TryEditSelectedAgendaEvent();
                 e.Handled = true;
             }
             else if (e == Key.CursorRight || e == Key.CursorLeft)
@@ -142,18 +140,7 @@ internal sealed class CalendarTab : View
         _app.App?.Invoke(() =>
         {
             _agendaFrame.Title = "Upcoming";
-            _agendaList.SetSource(new ObservableCollection<string>(
-                _todayEvents.Select(e =>
-                {
-                    if (e.IsAllDay)
-                    {
-                        var prefix = e.Start.ToLocalTime().Date == today ? "All day  " : $"{e.Start.ToLocalTime():MMM d} All day";
-                        return $"{prefix}  {e.Summary}";
-                    }
-                    var date = e.Start.ToLocalTime();
-                    var pfx = date.Date == today ? $"{date:HH:mm}    " : $"{date:MMM d} {date:HH:mm}";
-                    return $"{pfx}  {e.Summary}";
-                })));
+            _agendaList.SetRows(AgendaListView.BuildRows(_todayEvents, today));
         });
     }
 
@@ -175,13 +162,6 @@ internal sealed class CalendarTab : View
             _timelineFrame.Title = $"Timeline: {_windowStart:MMM d} - {end.AddDays(-1):MMM d}";
             _gridView.SetEvents(_windowStart, events);
         });
-    }
-
-    private void TryEditSelectedAgendaEvent()
-    {
-        var idx = _agendaList.SelectedItem ?? -1;
-        if (idx >= 0 && idx < _todayEvents.Count)
-            OpenEditor(_todayEvents[idx]);
     }
 
     private void OpenEditor(CalendarEvent? existingEvent, DateTimeOffset? suggestedStart = null)
@@ -211,16 +191,6 @@ internal sealed class CalendarTab : View
             .ToList();
 
         _agendaFrame.Title = $"{date:ddd MMM d}";
-        var lines = dayEvents.Count > 0
-            ? dayEvents.Select(e =>
-            {
-                if (e.IsAllDay)
-                    return $"All day  {e.Summary}";
-                var t = e.Start.ToLocalTime();
-                return $"{t:HH:mm}  {e.Summary}";
-            }).ToList()
-            : ["(no events)"];
-
-        _agendaList.SetSource(new ObservableCollection<string>(lines));
+        _agendaList.SetRows(AgendaListView.BuildRows(dayEvents, date));
     }
 }
