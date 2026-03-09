@@ -304,7 +304,7 @@ public sealed class GoogleMailProvider : IMailProvider
 
         // Direct text/plain body
         if (payload.MimeType == "text/plain" && payload.Body?.Data is not null)
-            return DecodeBase64Url(payload.Body.Data);
+            return DecodePartBody(payload);
 
         // Walk parts recursively
         if (payload.Parts is not null)
@@ -312,19 +312,47 @@ public sealed class GoogleMailProvider : IMailProvider
             // Prefer text/plain
             var plain = FindPart(payload.Parts, "text/plain");
             if (plain?.Body?.Data is not null)
-                return DecodeBase64Url(plain.Body.Data);
+                return DecodePartBody(plain);
 
             // Fall back to text/html → convert
             var html = FindPart(payload.Parts, "text/html");
             if (html?.Body?.Data is not null)
-                return HtmlToTextConverter.Convert(DecodeBase64Url(html.Body.Data));
+                return HtmlToTextConverter.Convert(DecodePartBody(html));
         }
 
         // Fallback: HTML body at top level
         if (payload.MimeType == "text/html" && payload.Body?.Data is not null)
-            return HtmlToTextConverter.Convert(DecodeBase64Url(payload.Body.Data));
+            return HtmlToTextConverter.Convert(DecodePartBody(payload));
 
         return "";
+    }
+
+    /// <summary>
+    /// Gmail API with format=full returns body data as base64url but does NOT decode
+    /// the MIME content-transfer-encoding. If the part uses quoted-printable, we must
+    /// decode that ourselves after the base64url decode.
+    /// </summary>
+    private static string DecodePartBody(MessagePart part)
+    {
+        // Gmail API base64url-decodes AND content-transfer-decodes (QP/base64)
+        // for us — Body.Data is always the raw decoded bytes in the part's charset.
+        var raw = DecodeBase64UrlBytes(part.Body!.Data!);
+        var charset = GetCharset(part);
+        var encoding = charset.Equals("utf-8", StringComparison.OrdinalIgnoreCase)
+            ? Encoding.UTF8
+            : Encoding.GetEncoding(charset);
+        return encoding.GetString(raw);
+    }
+
+    private static string GetCharset(MessagePart part)
+    {
+        var ct = part.Headers?.FirstOrDefault(
+            h => string.Equals(h.Name, "Content-Type", StringComparison.OrdinalIgnoreCase))?.Value;
+        if (ct is null) return "utf-8";
+        // Parse charset=X from Content-Type header
+        var match = System.Text.RegularExpressions.Regex.Match(ct, @"charset=""?([^"";\s]+)""?",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        return match.Success ? match.Groups[1].Value : "utf-8";
     }
 
     private static MessagePart? FindPart(IList<MessagePart> parts, string mimeType)
@@ -356,9 +384,11 @@ public sealed class GoogleMailProvider : IMailProvider
         return null;
     }
 
+    private static byte[] DecodeBase64UrlBytes(string data) =>
+        Convert.FromBase64String(data.Replace('-', '+').Replace('_', '/'));
+
     private static string DecodeBase64Url(string data) =>
-        Encoding.UTF8.GetString(Convert.FromBase64String(
-            data.Replace('-', '+').Replace('_', '/')));
+        Encoding.UTF8.GetString(DecodeBase64UrlBytes(data));
 
     private static string Base64UrlEncode(string data) =>
         Convert.ToBase64String(Encoding.UTF8.GetBytes(data))
@@ -369,7 +399,10 @@ public sealed class GoogleMailProvider : IMailProvider
     private static string BuildRfc2822Message(OutboundEmail email)
     {
         var sb = new StringBuilder();
-        sb.AppendLine($"From: {email.FromAccountId}");
+        var from = email.FromDisplayName is not null
+            ? $"{email.FromDisplayName} <{email.FromAccountId}>"
+            : email.FromAccountId;
+        sb.AppendLine($"From: {from}");
         sb.AppendLine($"To: {string.Join(", ", email.To)}");
         if (email.Cc.Count > 0)
             sb.AppendLine($"Cc: {string.Join(", ", email.Cc)}");

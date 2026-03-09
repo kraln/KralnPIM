@@ -32,7 +32,8 @@ public sealed record AccountConfig(
     List<CalendarSourceConfig>? Calendars,
     bool? IgnoreSslErrors = null,
     string? CalDavUrl = null,
-    string? Color = null
+    string? Color = null,
+    string? SenderName = null
 );
 
 public sealed record CalendarSourceConfig(

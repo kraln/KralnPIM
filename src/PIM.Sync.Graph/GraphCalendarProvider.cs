@@ -38,8 +38,9 @@ public sealed class GraphCalendarProvider : ICalendarProvider
 
     public async Task AuthenticateAsync(CancellationToken ct)
     {
-        var token = await _authProvider.GetAccessTokenAsync(ct);
-        _client = GraphClientFactory.Create(token);
+        // Validate that we can get a token (triggers device code if needed)
+        await _authProvider.GetAccessTokenAsync(ct);
+        _client = GraphClientFactory.Create(_authProvider);
 
         if (_allowedCalendarIds is null or { Count: 0 })
         {

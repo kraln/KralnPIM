@@ -5,23 +5,23 @@ namespace PIM.Sync.Graph;
 
 public static class GraphClientFactory
 {
-    public static GraphServiceClient Create(string accessToken)
+    public static GraphServiceClient Create(GraphAuthProvider authProvider)
     {
-        var authProvider = new BaseBearerTokenAuthenticationProvider(
-            new TokenProvider(accessToken));
-        return new GraphServiceClient(authProvider);
+        var tokenProvider = new BaseBearerTokenAuthenticationProvider(
+            new DynamicTokenProvider(authProvider));
+        return new GraphServiceClient(tokenProvider);
     }
 
-    private sealed class TokenProvider(string token) : IAccessTokenProvider
+    private sealed class DynamicTokenProvider(GraphAuthProvider authProvider) : IAccessTokenProvider
     {
         public AllowedHostsValidator AllowedHostsValidator { get; } = new();
 
-        public Task<string> GetAuthorizationTokenAsync(
+        public async Task<string> GetAuthorizationTokenAsync(
             Uri uri,
             Dictionary<string, object>? additionalAuthenticationContext = null,
             CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(token);
+            return await authProvider.GetAccessTokenAsync(cancellationToken);
         }
     }
 }

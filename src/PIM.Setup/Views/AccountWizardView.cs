@@ -29,6 +29,7 @@ internal sealed partial class AccountWizardView : View
     private string _clientSecret = "";
     private string _tenantId = "";
     private string _password = "";
+    private string _senderName = "";
     private string _caldavUrl = "";
     private bool _ignoreSslErrors;
     private readonly List<CalendarSourceConfig> _calendars = [];
@@ -53,6 +54,7 @@ internal sealed partial class AccountWizardView : View
             _clientId = editing.ClientId ?? "";
             _clientSecret = editing.ClientSecret ?? "";
             _tenantId = editing.TenantId ?? "";
+            _senderName = editing.SenderName ?? "";
             _ignoreSslErrors = editing.IgnoreSslErrors ?? false;
             _caldavUrl = editing.CalDavUrl ?? "";
             if (editing.Calendars is not null)
@@ -187,6 +189,16 @@ internal sealed partial class AccountWizardView : View
         var nameField = new TextField { X = 16, Y = y, Width = 30, Text = _displayName };
         y += 2;
 
+        TextField? senderField = null;
+        if (_accountType != AccountType.CalDav)
+        {
+            var senderLabel = new Label { X = 2, Y = y, Text = "Sender Name:" };
+            senderField = new TextField { X = 16, Y = y, Width = 30, Text = _senderName };
+            var senderHint = new Label { X = 48, Y = y, Text = "(e.g. John Doe)" };
+            Add(senderLabel, senderField, senderHint);
+            y += 2;
+        }
+
         Add(title, idLabel, idField, nameLabel, nameField);
 
         switch (_accountType)
@@ -229,6 +241,7 @@ internal sealed partial class AccountWizardView : View
                 {
                     _id = idField.Text;
                     _displayName = nameField.Text;
+                    _senderName = senderField!.Text;
                     _imapHost = imapHostField.Text;
                     _ = int.TryParse(imapPortField.Text, out _imapPort);
                     _imapTls = tlsCheck.Value == CheckState.Checked;
@@ -237,7 +250,7 @@ internal sealed partial class AccountWizardView : View
                     _username = userField.Text;
                     _ignoreSslErrors = imapSslCheck.Value == CheckState.Checked;
                     return ValidateDetails();
-                }, [idField, nameField, imapHostField, imapPortField, smtpHostField, smtpPortField, userField]);
+                }, [idField, nameField, senderField!, imapHostField, imapPortField, smtpHostField, smtpPortField, userField]);
                 break;
 
             case AccountType.Google:
@@ -248,8 +261,9 @@ internal sealed partial class AccountWizardView : View
                 {
                     _id = idField.Text;
                     _displayName = nameField.Text;
+                    _senderName = senderField!.Text;
                     return ValidateDetails();
-                }, [idField, nameField]);
+                }, [idField, nameField, senderField!]);
                 break;
 
             case AccountType.Office365:
@@ -260,8 +274,9 @@ internal sealed partial class AccountWizardView : View
                 {
                     _id = idField.Text;
                     _displayName = nameField.Text;
+                    _senderName = senderField!.Text;
                     return ValidateDetails();
-                }, [idField, nameField]);
+                }, [idField, nameField, senderField!]);
                 break;
 
             case AccountType.CalDav:
@@ -835,7 +850,8 @@ internal sealed partial class AccountWizardView : View
             Calendars: _accountType is AccountType.CalDav or AccountType.Google or AccountType.Office365
                 ? (_calendars.Count > 0 ? _calendars.ToList() : null) : null,
             IgnoreSslErrors: _ignoreSslErrors ? true : null,
-            CalDavUrl: _accountType == AccountType.CalDav && !string.IsNullOrWhiteSpace(_caldavUrl) ? _caldavUrl : null
+            CalDavUrl: _accountType == AccountType.CalDav && !string.IsNullOrWhiteSpace(_caldavUrl) ? _caldavUrl : null,
+            SenderName: !string.IsNullOrWhiteSpace(_senderName) ? _senderName : null
         );
 
         var accounts = _app.Config.Accounts.ToList();

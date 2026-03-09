@@ -66,7 +66,9 @@ public static class ImapMailMapper
     public static MimeMessage ToMimeMessage(OutboundEmail email)
     {
         var message = new MimeMessage();
-        message.From.Add(MailboxAddress.Parse(email.FromAccountId));
+        message.From.Add(email.FromDisplayName is not null
+            ? new MailboxAddress(email.FromDisplayName, email.FromAccountId)
+            : MailboxAddress.Parse(email.FromAccountId));
 
         foreach (var to in email.To)
             message.To.Add(MailboxAddress.Parse(to));
@@ -87,14 +89,80 @@ public static class ImapMailMapper
 
     public static string ExtractPlainText(MimeMessage message)
     {
+        // MailKit's TextBody decodes content-transfer-encoding automatically.
+        // But as a safety net, strip any residual QP artifacts.
         if (message.TextBody is not null)
-            return message.TextBody;
+            return StripQuotedPrintableArtifacts(message.TextBody);
 
         if (message.HtmlBody is not null)
             return HtmlToTextConverter.Convert(message.HtmlBody);
 
         return "";
     }
+
+    /// <summary>
+    /// Some messages arrive with QP artifacts still present (malformed senders,
+    /// or edge cases in MIME parsing). Detect and clean them up.
+    /// </summary>
+    private static string StripQuotedPrintableArtifacts(string text)
+    {
+        // Quick check: if no QP soft line breaks, return as-is
+        if (!text.Contains("=\r\n") && !text.Contains("=\n") && !text.Contains("=C2=") && !text.Contains("=c2="))
+            return text;
+
+        return DecodeQuotedPrintable(text);
+    }
+
+    private static string DecodeQuotedPrintable(string input)
+    {
+        var bytes = new List<byte>(input.Length);
+        for (var i = 0; i < input.Length; i++)
+        {
+            if (input[i] == '=' && i + 1 < input.Length)
+            {
+                // Soft line break: =\r\n or =\n
+                if (input[i + 1] == '\r' && i + 2 < input.Length && input[i + 2] == '\n')
+                {
+                    i += 2;
+                    continue;
+                }
+                if (input[i + 1] == '\n')
+                {
+                    i++;
+                    continue;
+                }
+                // Hex pair
+                if (i + 2 < input.Length && IsHex(input[i + 1]) && IsHex(input[i + 2]))
+                {
+                    bytes.Add((byte)((HexVal(input[i + 1]) << 4) | HexVal(input[i + 2])));
+                    i += 2;
+                    continue;
+                }
+            }
+            // Regular character — encode as UTF-8 bytes
+            if (input[i] < 128)
+            {
+                bytes.Add((byte)input[i]);
+            }
+            else
+            {
+                foreach (var b in System.Text.Encoding.UTF8.GetBytes(input, i, 1))
+                    bytes.Add(b);
+            }
+        }
+        return System.Text.Encoding.UTF8.GetString(bytes.ToArray());
+    }
+
+    private static bool IsHex(char c) =>
+        c is (>= '0' and <= '9') or (>= 'A' and <= 'F') or (>= 'a' and <= 'f');
+
+    private static int HexVal(char c) => c switch
+    {
+        >= '0' and <= '9' => c - '0',
+        >= 'A' and <= 'F' => c - 'A' + 10,
+        >= 'a' and <= 'f' => c - 'a' + 10,
+        _ => 0,
+    };
 
     public static string? GenerateSnippet(string? text)
     {

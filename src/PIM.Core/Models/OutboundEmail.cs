@@ -7,5 +7,6 @@ public sealed record OutboundEmail(
     List<string> Bcc,
     string Subject,
     string PlainTextBody,
-    string? InReplyToMessageId
+    string? InReplyToMessageId,
+    string? FromDisplayName = null
 );

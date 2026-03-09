@@ -146,6 +146,9 @@ public sealed class PimApiClient : IDisposable
     public async Task<SystemStatus?> GetStatusAsync(CancellationToken ct = default) =>
         await GetAsync<SystemStatus>("/api/system/status", ct);
 
+    internal async Task<HttpResponseMessage> PostAsJsonRawAsync<T>(string url, T body, CancellationToken ct = default) =>
+        await _http.PostAsJsonAsync(url, body, _jsonOptions, ct);
+
     // Helpers
 
     private async Task<T?> GetAsync<T>(string url, CancellationToken ct)

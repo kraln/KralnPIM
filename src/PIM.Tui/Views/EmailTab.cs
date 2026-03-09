@@ -562,6 +562,7 @@ internal sealed class EmailTab : View
         _composeView = new ComposeView(_api, _app, replyTo, onClose: CloseCompose);
 
         _readerContent.Visible = false;
+        _readerFrame.CanFocus = true;
         _readerFrame.Add(_composeView);
         _composeView.SetFocus();
     }

@@ -93,7 +93,8 @@ public static class ConfigLoader
             calendars,
             dto.IgnoreSslErrors,
             dto.CalDavUrl,
-            dto.Color
+            dto.Color,
+            dto.SenderName
         );
     }
 
@@ -220,6 +221,7 @@ public static class ConfigLoader
         public bool? IgnoreSslErrors { get; set; }
         public string? CalDavUrl { get; set; }
         public string? Color { get; set; }
+        public string? SenderName { get; set; }
     }
 
     private sealed class CalendarDto

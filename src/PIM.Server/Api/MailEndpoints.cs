@@ -120,6 +120,7 @@ internal static class MailEndpoints
             OutboundEmail email,
             ProviderRegistry registry,
             AccountStatusTracker tracker,
+            PimConfig config,
             CancellationToken ct) =>
         {
             if (!tracker.IsOnline(email.FromAccountId))
@@ -130,6 +131,14 @@ internal static class MailEndpoints
             if (provider is null)
                 return Results.Json(new ErrorResponse($"Account '{email.FromAccountId}' not found."),
                     ServerJsonContext.Default.ErrorResponse, statusCode: 404);
+
+            // Populate sender name from config if not provided by client
+            if (email.FromDisplayName is null)
+            {
+                var account = config.Accounts.FirstOrDefault(a => a.Id == email.FromAccountId);
+                if (account?.SenderName is not null)
+                    email = email with { FromDisplayName = account.SenderName };
+            }
 
             await provider.SendAsync(email, ct);
             return Results.Accepted();

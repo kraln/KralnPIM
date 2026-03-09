@@ -15,6 +15,7 @@ internal sealed class ComposeView : View
     private readonly TuiApp _app;
     private readonly Action _onClose;
     private readonly string? _inReplyToMessageId;
+    private readonly string? _replyAccountId;
 
     private readonly ComboBox _fromAccount;
     private readonly TextField _toField;
@@ -71,7 +72,8 @@ internal sealed class ComposeView : View
             Width = Dim.Fill(),
             Height = Dim.Fill(2),
             ReadOnly = false,
-            CanFocus = true
+            CanFocus = true,
+            WordWrap = true
         };
         Add(_bodyView);
 
@@ -87,6 +89,7 @@ internal sealed class ComposeView : View
         if (replyTo is not null)
         {
             _inReplyToMessageId = replyTo.Header.MessageId;
+            _replyAccountId = replyTo.Header.AccountId;
             _toField.Text = replyTo.Header.FromAddress;
             _subjectField.Text = replyTo.Header.Subject.StartsWith("Re:", StringComparison.OrdinalIgnoreCase)
                 ? replyTo.Header.Subject
@@ -116,21 +119,34 @@ internal sealed class ComposeView : View
             }
         };
 
-        // Load accounts for From dropdown
-        Initialized += (_, _) => _ = LoadAccountsAsync();
+        // Load accounts for From dropdown, then focus body for replies
+        Initialized += (_, _) => _ = LoadAccountsAsync(replyTo is not null);
     }
 
-    private async Task LoadAccountsAsync()
+    private async Task LoadAccountsAsync(bool focusBody)
     {
-        _accounts = await _app.SafeApiCallAsync(
+        var allAccounts = await _app.SafeApiCallAsync(
             c => _api.GetAccountsAsync(c)) ?? [];
+
+        // CalDav accounts are calendar-only — no mail provider
+        _accounts = allAccounts.Where(a => a.Type != "CalDav").ToList();
 
         _app.App?.Invoke(() =>
         {
             _fromAccount.SetSource(new ObservableCollection<string>(
                 _accounts.Select(a => $"{a.DisplayName} ({a.Type})")));
-            if (_accounts.Count > 0)
-                _fromAccount.SelectedItem = 0;
+
+            // Pre-select the account that received the email (for replies)
+            var idx = _replyAccountId is not null
+                ? _accounts.FindIndex(a => a.Id == _replyAccountId)
+                : -1;
+            _fromAccount.SelectedItem = idx >= 0 ? idx : (_accounts.Count > 0 ? 0 : -1);
+
+            if (focusBody)
+            {
+                _bodyView.SetFocus();
+                _bodyView.MoveHome();
+            }
         });
     }
 
@@ -166,9 +182,28 @@ internal sealed class ComposeView : View
             _bodyView.Text,
             _inReplyToMessageId);
 
-        await _app.SafeApiCallAsync(c => _api.SendMailAsync(email, c));
-        _app.ShowStatus("Message sent");
-        _onClose();
+        try
+        {
+            using var response = await _api.PostAsJsonRawAsync("/api/mail/send", email);
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync();
+                _app.App?.Invoke(() => _app.ShowError(
+                    $"Send failed ({(int)response.StatusCode}): {body}"));
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            _app.App?.Invoke(() => _app.ShowError($"Send failed: {ex.Message}"));
+            return;
+        }
+
+        _app.App?.Invoke(() =>
+        {
+            _app.ShowStatus("Message sent");
+            _onClose();
+        });
     }
 
     private static List<string> ParseAddresses(string text) =>

@@ -2,6 +2,7 @@ accounts:
   - id: "personal-imap"
     type: imap
     display_name: "Personal"
+    sender_name: "John Doe"
     imap_host: "mail.example.com"
     imap_port: 993
     imap_tls: true
@@ -12,6 +13,7 @@ accounts:
   - id: "work-google"
     type: google
     display_name: "Work (Google)"
+    sender_name: "John Doe"
     # Uses built-in OAuth credentials — no client_id/client_secret needed
     calendars: []
 
