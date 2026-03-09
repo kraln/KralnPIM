@@ -187,6 +187,7 @@ public sealed class GoogleMailProvider : IMailProvider
         {
             await _rateLimiter.WaitAsync(5, ct);
             var listRequest = _service!.Users.Messages.List(UserId);
+            listRequest.LabelIds = "INBOX";
             listRequest.Q = $"after:{sinceUnix}";
             listRequest.PageToken = pageToken;
             listRequest.MaxResults = 100;
@@ -254,6 +255,7 @@ public sealed class GoogleMailProvider : IMailProvider
             await _rateLimiter.WaitAsync(5, ct);
             var request = _service!.Users.History.List(UserId);
             request.StartHistoryId = ulong.Parse(historyId);
+            request.LabelId = "INBOX";
             request.HistoryTypes = UsersResource.HistoryResource.ListRequest.HistoryTypesEnum.MessageAdded;
             request.PageToken = pageToken;
             var response = await request.ExecuteAsync(ct);
