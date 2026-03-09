@@ -81,7 +81,7 @@ internal static class CalendarDiscovery
                 var bytes = Convert.FromBase64String(stored.AccessToken);
                 args.TokenCache.DeserializeMsalV3(bytes);
             }
-            catch (FormatException) { }
+            catch { /* Not a valid MSAL cache blob */ }
             return Task.CompletedTask;
         });
 

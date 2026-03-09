@@ -134,7 +134,7 @@ public sealed class GraphCalendarProvider : ICalendarProvider
     private async Task<SyncResult<CalendarEvent>> FullSyncCalendarAsync(
         string calendarId, DateTimeOffset rangeStart, DateTimeOffset rangeEnd, CancellationToken ct)
     {
-        var upserted = new List<CalendarEvent>();
+        var allEvents = new List<GraphEvent>();
         string? deltaLink = null;
 
         var response = await _client!.Me.Calendars[calendarId].CalendarView.Delta
@@ -147,10 +147,7 @@ public sealed class GraphCalendarProvider : ICalendarProvider
         while (response is not null)
         {
             if (response.Value is not null)
-            {
-                foreach (var evt in response.Value)
-                    upserted.Add(GraphCalendarMapper.ToCalendarEvent(evt, AccountId, calendarId));
-            }
+                allEvents.AddRange(response.Value);
 
             if (response.OdataNextLink is not null)
             {
@@ -164,6 +161,8 @@ public sealed class GraphCalendarProvider : ICalendarProvider
                 break;
             }
         }
+
+        var upserted = MapEventsWithSeriesMasters(allEvents, calendarId);
 
         if (deltaLink is not null)
         {
@@ -193,7 +192,7 @@ public sealed class GraphCalendarProvider : ICalendarProvider
     private async Task<SyncResult<CalendarEvent>> DeltaSyncCalendarCoreAsync(
         string calendarId, string deltaLink, CancellationToken ct)
     {
-        var upserted = new List<CalendarEvent>();
+        var allEvents = new List<GraphEvent>();
         var deletedIds = new List<string>();
         string? newDeltaLink = null;
 
@@ -215,7 +214,7 @@ public sealed class GraphCalendarProvider : ICalendarProvider
                     }
                     else
                     {
-                        upserted.Add(GraphCalendarMapper.ToCalendarEvent(evt, AccountId, calendarId));
+                        allEvents.Add(evt);
                     }
                 }
             }
@@ -233,6 +232,8 @@ public sealed class GraphCalendarProvider : ICalendarProvider
             }
         }
 
+        var upserted = MapEventsWithSeriesMasters(allEvents, calendarId);
+
         if (newDeltaLink is not null)
         {
             await _syncStateRepo.SetAsync(AccountId, $"{ResourceType}:{calendarId}",
@@ -240,6 +241,45 @@ public sealed class GraphCalendarProvider : ICalendarProvider
         }
 
         return new SyncResult<CalendarEvent>(upserted, deletedIds, newDeltaLink);
+    }
+
+    /// <summary>
+    /// The delta endpoint returns series masters (with subject/isAllDay but historical dates)
+    /// and occurrences (with correct dates but missing subject/isAllDay). This method builds
+    /// a lookup of series masters, inherits their properties onto occurrences, and skips the
+    /// series masters themselves from the output.
+    /// </summary>
+    private List<CalendarEvent> MapEventsWithSeriesMasters(List<GraphEvent> allEvents, string calendarId)
+    {
+        var masters = new Dictionary<string, GraphEvent>();
+        foreach (var evt in allEvents)
+        {
+            if (evt.Type?.ToString() == "SeriesMaster" && evt.Id is not null)
+                masters[evt.Id] = evt;
+        }
+
+        var results = new List<CalendarEvent>();
+        foreach (var evt in allEvents)
+        {
+            // Skip series masters — we only want the occurrences with real dates
+            if (evt.Type?.ToString() == "SeriesMaster")
+                continue;
+
+            // Inherit missing fields from series master
+            if (evt.SeriesMasterId is not null &&
+                masters.TryGetValue(evt.SeriesMasterId, out var master))
+            {
+                if (string.IsNullOrEmpty(evt.Subject))
+                    evt.Subject = master.Subject;
+                evt.IsAllDay ??= master.IsAllDay;
+                if (evt.Location is null || string.IsNullOrEmpty(evt.Location.DisplayName))
+                    evt.Location = master.Location;
+            }
+
+            results.Add(GraphCalendarMapper.ToCalendarEvent(evt, AccountId, calendarId));
+        }
+
+        return results;
     }
 
     private void EnsureClient()

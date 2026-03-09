@@ -33,7 +33,7 @@ internal static class GraphAuthFlow
                 var bytes = Convert.FromBase64String(stored.AccessToken);
                 args.TokenCache.DeserializeMsalV3(bytes);
             }
-            catch (FormatException)
+            catch
             {
                 // Not a valid MSAL cache blob (first run or legacy token format)
             }
@@ -102,13 +102,7 @@ internal static class GraphAuthFlow
             return Task.CompletedTask;
         }).ExecuteAsync(ct);
 
-        // Persist token via IAuthRepository (MSAL cache handles refresh tokens)
-        await authRepo.SaveOAuthTokenAsync(new OAuthToken(
-            AccountId: accountId,
-            AccessToken: result.AccessToken,
-            RefreshToken: "msal-managed",
-            ExpiresAt: result.ExpiresOn
-        ), ct);
+        // AfterAccess callback already persisted the MSAL cache blob to IAuthRepository
 
         onStatus("O365 authorization successful.");
         return true;

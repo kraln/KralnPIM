@@ -92,13 +92,7 @@ public sealed class GraphAuthProvider
             return Task.CompletedTask;
         }).ExecuteAsync(ct);
 
-        // Persist token to IAuthRepository
-        await _authRepo.SaveOAuthTokenAsync(new OAuthToken(
-            AccountId: _accountId,
-            AccessToken: result.AccessToken,
-            RefreshToken: "", // MSAL manages refresh tokens internally
-            ExpiresAt: result.ExpiresOn
-        ), ct);
+        // AfterAccess callback already persisted the MSAL cache blob to IAuthRepository
 
         return CacheToken(result);
     }
@@ -126,7 +120,7 @@ public sealed class GraphAuthProvider
                     var bytes = Convert.FromBase64String(stored.AccessToken);
                     args.TokenCache.DeserializeMsalV3(bytes);
                 }
-                catch (FormatException)
+                catch
                 {
                     // Not a valid cache blob — first time or legacy token
                 }

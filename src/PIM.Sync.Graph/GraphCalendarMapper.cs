@@ -114,7 +114,13 @@ public static class GraphCalendarMapper
         {
             var tz = ParseTimeZone(evt.Start.TimeZone);
             if (DateTime.TryParse(evt.Start.DateTime, out var dt))
+            {
+                // Detect implicit all-day: midnight-to-midnight spanning whole days
+                if (dt.TimeOfDay == TimeSpan.Zero && LooksLikeAllDay(evt))
+                    return (AllDayMidnight(dt), true);
+
                 return (new DateTimeOffset(dt, tz.GetUtcOffset(dt)), false);
+            }
         }
 
         return (DateTimeOffset.MinValue, false);
@@ -138,6 +144,24 @@ public static class GraphCalendarMapper
         }
 
         return DateTimeOffset.MinValue;
+    }
+
+    /// <summary>
+    /// Heuristic: event starts at midnight and ends at midnight on a different day.
+    /// Graph sometimes returns all-day events with IsAllDay=false/null.
+    /// </summary>
+    private static bool LooksLikeAllDay(GraphEvent evt)
+    {
+        if (evt.Start?.DateTime is null || evt.End?.DateTime is null)
+            return false;
+        if (!DateTime.TryParse(evt.End.DateTime, out var end))
+            return false;
+        if (end.TimeOfDay != TimeSpan.Zero)
+            return false;
+        if (!DateTime.TryParse(evt.Start.DateTime, out var start))
+            return false;
+        var days = (end - start).TotalDays;
+        return days >= 1 && days == Math.Floor(days);
     }
 
     private static DateTimeOffset AllDayMidnight(DateTime date)
