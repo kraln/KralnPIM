@@ -70,9 +70,13 @@ internal static class MailEndpoints
                         body = new EmailBody(messageId, plainText);
                     }
                     catch (Exception ex) when (
-                        ex.GetType().Name == "MessageNotFoundException")
+                        ex.GetType().Name == "MessageNotFoundException"
+                        || ex is FormatException
+                        || ex is IOException
+                        || ex is InvalidOperationException)
                     {
-                        // Message was moved/deleted on the server since last sync
+                        // Message was moved/deleted on the server since last sync,
+                        // or the stream was truncated (FormatException: End of stream)
                         await repo.DeleteAsync(messageId, ct);
                         return Results.Json(new ErrorResponse("Message no longer exists on server."),
                             ServerJsonContext.Default.ErrorResponse, statusCode: 404);

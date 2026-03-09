@@ -46,8 +46,14 @@ public sealed class PimApiClient : IDisposable
     public async Task<List<AccountOverview>> GetAccountsAsync(CancellationToken ct = default) =>
         await GetAsync<List<AccountOverview>>("/api/mail/accounts", ct) ?? [];
 
-    public async Task<MailDetail?> GetMailDetailAsync(string messageId, CancellationToken ct = default) =>
-        await GetAsync<MailDetail>($"/api/mail/{Uri.EscapeDataString(messageId)}", ct);
+    public async Task<MailDetail?> GetMailDetailAsync(string messageId, CancellationToken ct = default)
+    {
+        using var response = await _http.GetAsync($"/api/mail/{Uri.EscapeDataString(messageId)}", ct);
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            return null;
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<MailDetail>(_jsonOptions, ct);
+    }
 
     public async Task SetMailFlagsAsync(string messageId, MailFlagPatch patch, CancellationToken ct = default)
     {

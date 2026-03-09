@@ -3,9 +3,12 @@ using PIM.Tui.Client;
 using PIM.Tui.Models;
 using PIM.Tui.Views;
 using Terminal.Gui.App;
+using Terminal.Gui.Configuration;
+using Terminal.Gui.Drawing;
 using Terminal.Gui.Input;
 using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
+using GuiAttribute = Terminal.Gui.Drawing.Attribute;
 
 namespace PIM.Tui;
 
@@ -36,6 +39,18 @@ internal sealed class TuiApp : Window
         _api = api;
         _ws = ws;
         Title = "KralnPIM (q to quit)";
+
+        // Apply Solarized Dark color scheme globally so standard views
+        // (Labels, TextViews, FrameViews) inherit dark background colors.
+        SchemeManager.AddScheme("Solarized", new Scheme
+        {
+            Normal = new GuiAttribute(Sol.Base0, Sol.Base03),
+            HotNormal = new GuiAttribute(Sol.Yellow, Sol.Base03),
+            Focus = new GuiAttribute(Sol.Base1, Sol.Base02),
+            HotFocus = new GuiAttribute(Sol.Yellow, Sol.Base02),
+            Disabled = new GuiAttribute(Sol.Base01, Sol.Base03),
+        });
+        SchemeName = "Solarized";
 
         _dashboardTab = new DashboardTab(api, this);
         _calendarTab = new CalendarTab(api, this);

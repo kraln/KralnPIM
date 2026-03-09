@@ -119,12 +119,13 @@ public sealed class PimApiClientTests : IDisposable
     }
 
     [Fact]
-    public async Task GetAsync_ThrowsOnNotFound()
+    public async Task GetMailDetailAsync_ReturnsNullOnNotFound()
     {
         using var client = CreateClient(HttpStatusCode.NotFound,
             JsonSerializer.Serialize(new ErrorResponse("Not found"), _json));
 
-        await Assert.ThrowsAsync<HttpRequestException>(() => client.GetMailDetailAsync("no-such-msg"));
+        var result = await client.GetMailDetailAsync("no-such-msg");
+        Assert.Null(result);
     }
 
     [Fact]

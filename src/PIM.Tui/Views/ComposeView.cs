@@ -70,7 +70,8 @@ internal sealed class ComposeView : View
             X = 0, Y = y + 1,
             Width = Dim.Fill(),
             Height = Dim.Fill(2),
-            ReadOnly = false
+            ReadOnly = false,
+            CanFocus = true
         };
         Add(_bodyView);
 
