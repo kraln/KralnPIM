@@ -279,7 +279,8 @@ public class EndpointTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var json = await response.Content.ReadAsStringAsync();
-        Assert.Contains("Eastern", json);
+        // Label is overridden with config timezone ID
+        Assert.Contains("America/New_York", json);
     }
 
     [Fact]

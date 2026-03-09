@@ -12,6 +12,8 @@ public sealed class OpenMeteoWeatherProvider : IWeatherProvider
 
     private readonly HttpClient _httpClient;
     private readonly ILogger<OpenMeteoWeatherProvider> _logger;
+    private string? _cachedLocationName;
+    private bool _locationLookedUp;
 
     public OpenMeteoWeatherProvider(HttpClient httpClient, ILogger<OpenMeteoWeatherProvider> logger)
     {
@@ -23,6 +25,13 @@ public sealed class OpenMeteoWeatherProvider : IWeatherProvider
     {
         try
         {
+            // One-time reverse geocode via Nominatim
+            if (!_locationLookedUp)
+            {
+                _locationLookedUp = true;
+                _cachedLocationName = await ReverseGeocodeAsync(lat, lon, ct);
+            }
+
             var url = string.Format(
                 CultureInfo.InvariantCulture,
                 "https://api.open-meteo.com/v1/forecast?latitude={0}&longitude={1}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&daily=sunrise,sunset,weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=7",
@@ -86,12 +95,53 @@ public sealed class OpenMeteoWeatherProvider : IWeatherProvider
                 }
             }
 
-            return new WeatherInfo(temperature, condition, humidity, windSpeed, dailyForecasts);
+            return new WeatherInfo(temperature, condition, humidity, windSpeed, dailyForecasts, _cachedLocationName);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to fetch weather data");
             return Fallback;
+        }
+    }
+
+    private async Task<string?> ReverseGeocodeAsync(double lat, double lon, CancellationToken ct)
+    {
+        try
+        {
+            var url = string.Format(
+                CultureInfo.InvariantCulture,
+                "https://nominatim.openstreetmap.org/reverse?lat={0}&lon={1}&format=json&zoom=10",
+                lat, lon);
+
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.UserAgent.ParseAdd("KralnPIM/1.0");
+
+            var response = await _httpClient.SendAsync(request, ct);
+            response.EnsureSuccessStatusCode();
+
+            var json = await response.Content.ReadAsStringAsync(ct);
+            using var doc = JsonDocument.Parse(json);
+
+            // Try city/town/village from address, fall back to display_name
+            if (doc.RootElement.TryGetProperty("address", out var addr))
+            {
+                foreach (var key in new[] { "city", "town", "village", "municipality" })
+                {
+                    if (addr.TryGetProperty(key, out var val) && val.GetString() is { } name)
+                        return name;
+                }
+            }
+
+            if (doc.RootElement.TryGetProperty("name", out var nameProp)
+                && nameProp.GetString() is { Length: > 0 } n)
+                return n;
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Nominatim reverse geocode failed");
+            return null;
         }
     }
 

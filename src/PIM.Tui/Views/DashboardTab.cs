@@ -14,18 +14,17 @@ internal sealed class DashboardTab : View
 {
     private readonly PimApiClient _api;
     private readonly TuiApp _app;
+    private readonly TihApiClient? _tihClient;
 
     private readonly FrameView _agendaFrame;
-    private readonly FrameView _weatherFrame;
-    private readonly FrameView _systemFrame;
+    private readonly FrameView _infoFrame;
+    private readonly FrameView _tihFrame;
     private readonly FrameView _mailFrame;
 
     private readonly AgendaListView _agendaList;
-    private readonly Label _dateLabel;
     private readonly Label _currentWeatherLabel;
     private readonly Label _forecastLabel;
-    private readonly Label _powerLabel;
-    private readonly Label _clockLabel;
+    private readonly TodayInHistoryView _tihView;
     private readonly AccountListView _accountList;
     private readonly EmailListView _recentMailList;
 
@@ -33,10 +32,11 @@ internal sealed class DashboardTab : View
     private List<AccountOverview> _accounts = [];
     private List<EmailHeader> _recentMail = [];
 
-    public DashboardTab(PimApiClient api, TuiApp app)
+    public DashboardTab(PimApiClient api, TuiApp app, TihApiClient? tihClient = null)
     {
         _api = api;
         _app = app;
+        _tihClient = tihClient;
         CanFocus = true;
         X = 0; Y = 0; Width = Dim.Fill(); Height = Dim.Fill();
 
@@ -56,40 +56,42 @@ internal sealed class DashboardTab : View
         };
         _agendaFrame.Add(_agendaList);
 
-        var today = DateTimeOffset.Now;
-        var week = System.Globalization.ISOWeek.GetWeekOfYear(today.DateTime);
-
-        _weatherFrame = new FrameView
+        _infoFrame = new FrameView
         {
             Title = "Weather",
             X = Pos.Right(_agendaFrame),
             Y = 0,
             Width = Dim.Percent(30),
-            Height = Dim.Percent(60)
+            Height = 8
         };
 
-        _dateLabel = new Label { X = 0, Y = 0, Width = Dim.Fill(), Text = $"{today:dddd, d MMMM yyyy}  (W{week})" };
-        _currentWeatherLabel = new Label { X = 0, Y = 1, Width = Dim.Fill(), Text = "loading..." };
-        _forecastLabel = new Label { X = 0, Y = 3, Width = Dim.Fill(), Height = 5, Text = "" };
-        _weatherFrame.Add(_dateLabel, _currentWeatherLabel, _forecastLabel);
+        _currentWeatherLabel = new Label { X = 0, Y = 0, Width = Dim.Fill(), Text = "loading..." };
+        _forecastLabel = new Label { X = 0, Y = 2, Width = Dim.Fill(), Height = 4, Text = "" };
+        _infoFrame.Add(_currentWeatherLabel, _forecastLabel);
 
-        _systemFrame = new FrameView
+        _tihFrame = new FrameView
         {
-            Title = "System",
+            Title = "Today in History",
             X = Pos.Right(_agendaFrame),
-            Y = Pos.Bottom(_weatherFrame),
+            Y = Pos.Bottom(_infoFrame),
             Width = Dim.Percent(30),
             Height = Dim.Fill()
         };
 
-        _powerLabel = new Label { X = 0, Y = 0, Width = Dim.Fill(), Text = "Power: loading..." };
-        _clockLabel = new Label { X = 0, Y = 2, Width = Dim.Fill(), Height = Dim.Fill(), Text = "Clock: loading..." };
-        _systemFrame.Add(_powerLabel, _clockLabel);
+        _tihView = new TodayInHistoryView
+        {
+            X = 0, Y = 0,
+            Width = Dim.Fill(),
+            Height = Dim.Fill()
+        };
+        if (_tihClient is null)
+            _tihView.SetData(null);
+        _tihFrame.Add(_tihView);
 
         _mailFrame = new FrameView
         {
             Title = "Mail",
-            X = Pos.Right(_weatherFrame),
+            X = Pos.Right(_infoFrame),
             Y = 0,
             Width = Dim.Fill(),
             Height = Dim.Fill()
@@ -111,17 +113,19 @@ internal sealed class DashboardTab : View
         _accountList.FilterChanged += ApplyMailFilter;
         _mailFrame.Add(_accountList, _recentMailList);
 
-        Add(_agendaFrame, _weatherFrame, _systemFrame, _mailFrame);
+        Add(_agendaFrame, _infoFrame, _tihFrame, _mailFrame);
 
         _app.RegisterQuitKey(_agendaList);
         _app.RegisterQuitKey(_accountList);
         _app.RegisterQuitKey(_recentMailList);
+        _app.RegisterQuitKey(_tihView);
 
         Initialized += (_, _) =>
         {
             _app.App!.AddTimeout(TimeSpan.FromSeconds(60), () =>
             {
                 _ = RefreshSystemAsync(CancellationToken.None);
+                _ = RefreshTihAsync(CancellationToken.None);
                 return true;
             });
         };
@@ -132,7 +136,8 @@ internal sealed class DashboardTab : View
         await Task.WhenAll(
             RefreshAgendaAsync(ct),
             RefreshSystemAsync(ct),
-            RefreshMailOverviewAsync(ct));
+            RefreshMailOverviewAsync(ct),
+            RefreshTihAsync(ct));
     }
 
     internal async Task RefreshAgendaAsync(CancellationToken ct)
@@ -166,14 +171,11 @@ internal sealed class DashboardTab : View
 
         _app.App?.Invoke(() =>
         {
-            var now = DateTimeOffset.Now;
-            var wk = System.Globalization.ISOWeek.GetWeekOfYear(now.DateTime);
-            _dateLabel.Text = $"{now:dddd, d MMMM yyyy}  (W{wk})";
-
             if (weather is not null)
             {
                 var emoji = WeatherEmoji(weather.Condition);
-                _currentWeatherLabel.Text = $"{emoji} {weather.TemperatureCelsius:F1}\u00b0C  {weather.Condition}";
+                var loc = weather.LocationName is not null ? $"  ({weather.LocationName})" : "";
+                _currentWeatherLabel.Text = $"{emoji} {weather.TemperatureCelsius:F1}\u00b0C  {weather.Condition}{loc}";
 
                 if (weather.Daily is { Count: > 0 })
                 {
@@ -202,28 +204,20 @@ internal sealed class DashboardTab : View
                 _forecastLabel.Text = "";
             }
 
-            if (power is not null)
-            {
-                var remaining = power.TimeRemaining is not null ? $" ({power.TimeRemaining})" : "";
-                _powerLabel.Text = $"Power: {power.BatteryPercent}%{remaining}";
-            }
-            else
-            {
-                _powerLabel.Text = "Power: unavailable";
-            }
+            // Battery goes to status bar
+            _app.UpdateBattery(power);
 
-            if (clock is not null)
-            {
-                var lines = clock.Zones
-                    .Select(z => $"  {z.Label}: {z.CurrentTime.ToLocalTime():HH:mm}")
-                    .ToList();
-                _clockLabel.Text = "Clocks:\n" + string.Join("\n", lines);
-            }
-            else
-            {
-                _clockLabel.Text = "Clock: unavailable";
-            }
+            // Clock data goes to TIH greeting
+            _tihView.SetClock(clock);
         });
+    }
+
+    internal async Task RefreshTihAsync(CancellationToken ct)
+    {
+        if (_tihClient is null) return;
+
+        var data = await _tihClient.GetTodayAsync(ct);
+        _app.App?.Invoke(() => _tihView.SetData(data));
     }
 
     internal async Task RefreshMailOverviewAsync(CancellationToken ct)

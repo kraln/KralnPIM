@@ -20,6 +20,10 @@ namespace PIM.Tui.Models;
 [JsonSerializable(typeof(MailSyncEvent))]
 [JsonSerializable(typeof(CalendarSyncEvent))]
 [JsonSerializable(typeof(StatusChangeEvent))]
+[JsonSerializable(typeof(TihResponse))]
+[JsonSerializable(typeof(List<TihEntry>))]
+[JsonSerializable(typeof(List<TihHoliday>))]
+[JsonSerializable(typeof(List<TihPersonal>))]
 public partial class TuiJsonContext : JsonSerializerContext
 {
 }

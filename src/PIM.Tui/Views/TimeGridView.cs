@@ -29,6 +29,7 @@ internal sealed class TimeGridView : View
     private int _scrollOffset = DefaultStartSlot;
     private int _cursorSlot = DefaultStartSlot;
     private int _cursorDay; // 0-3
+    private bool _initialPositionSet;
 
     private DateTimeOffset _windowStart;
     private readonly CalendarEvent?[,] _grid = new CalendarEvent?[4, TotalSlots];
@@ -98,7 +99,51 @@ internal sealed class TimeGridView : View
                 _forecastLabels[day] = null;
             }
         }
+
+        // On first load, position the viewport to show sunrise-to-sunset for today
+        if (!_initialPositionSet)
+        {
+            _initialPositionSet = true;
+            PositionToSunlightHours();
+        }
+
         SetNeedsDraw();
+    }
+
+    /// <summary>
+    /// Positions the scroll so the viewport spans sunrise to sunset for day 0 (today).
+    /// Cursor is placed at sunrise. Falls back to 08:00-20:00 if no sun data.
+    /// </summary>
+    private void PositionToSunlightHours()
+    {
+        var (sunrise, sunset) = _sunSlots[0];
+        if (sunrise < 0 || sunset < 0 || sunset <= sunrise)
+        {
+            // No sun data — fall back to 07:00 start
+            sunrise = 7 * SlotsPerHour;
+            sunset = 20 * SlotsPerHour;
+        }
+
+        // Add a small margin before sunrise (1 hour)
+        var start = Math.Max(0, sunrise - SlotsPerHour);
+
+        var visibleSlots = Math.Max(1, Viewport.Height - HeaderRows);
+
+        // If sunrise-to-sunset fits in the viewport, center it
+        var sunRange = sunset - sunrise + 2 * SlotsPerHour; // with margin
+        if (sunRange <= visibleSlots)
+        {
+            var mid = (sunrise + sunset) / 2;
+            _scrollOffset = Math.Clamp(mid - visibleSlots / 2, 0, Math.Max(0, TotalSlots - visibleSlots));
+        }
+        else
+        {
+            // Doesn't fit — start at sunrise minus margin
+            _scrollOffset = Math.Clamp(start, 0, Math.Max(0, TotalSlots - visibleSlots));
+        }
+
+        _cursorSlot = Math.Clamp(sunrise, 0, TotalSlots - 1);
+        _cursorDay = 0;
     }
 
     internal CalendarEvent? GetEventAtCursor() => _grid[_cursorDay, _cursorSlot];

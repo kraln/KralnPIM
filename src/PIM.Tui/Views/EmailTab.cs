@@ -391,11 +391,11 @@ internal sealed class EmailTab : View
 
         if (detail is null)
         {
-            // 404 — message was deleted/moved on server; remove from local list
+            // 404 — message was deleted/moved on server; remove from local list.
+            // RemoveEmail handles removal from the shared list, so don't also RemoveAt here.
             var gone = _emails.IndexOf(header);
             if (gone >= 0)
             {
-                _emails.RemoveAt(gone);
                 _selectedEmail = null;
                 _currentDetail = null;
                 _app.App?.Invoke(() =>
@@ -477,6 +477,7 @@ internal sealed class EmailTab : View
         }
 
         _app.ShowStatus(newRead ? "Marked as read" : "Marked as unread");
+        _app.NotifyMailChanged();
     }
 
     private async Task ToggleFlagAsync(EmailHeader header)
@@ -498,6 +499,7 @@ internal sealed class EmailTab : View
         }
 
         _app.ShowStatus(newFlagged ? "Flagged" : "Unflagged");
+        _app.NotifyMailChanged();
     }
 
     private async Task MoveToJunkAsync(EmailHeader header)
@@ -505,10 +507,10 @@ internal sealed class EmailTab : View
         await _app.SafeApiCallAsync(
             c => _api.MoveToJunkAsync(header.MessageId, c));
 
+        // RemoveEmail handles removal from the shared list, so don't also RemoveAt here.
         var idx = _emails.IndexOf(header);
         if (idx >= 0)
         {
-            _emails.RemoveAt(idx);
             _selectedEmail = null;
             _currentDetail = null;
             _app.App?.Invoke(() =>
@@ -520,6 +522,7 @@ internal sealed class EmailTab : View
         }
 
         _app.ShowStatus("Moved to junk");
+        _app.NotifyMailChanged();
     }
 
     private void ClearReader()

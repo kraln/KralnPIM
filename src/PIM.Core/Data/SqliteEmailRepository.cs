@@ -39,7 +39,7 @@ public sealed class SqliteEmailRepository : IEmailRepository
             cmd.Parameters.AddWithValue("@fromDisp", (object?)header.FromDisplayName ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@to", JsonSerializer.Serialize(header.ToAddresses, PimJsonContext.Default.ListString));
             cmd.Parameters.AddWithValue("@cc", JsonSerializer.Serialize(header.CcAddresses, PimJsonContext.Default.ListString));
-            cmd.Parameters.AddWithValue("@date", header.Date.ToString("O"));
+            cmd.Parameters.AddWithValue("@date", header.Date.ToUniversalTime().ToString("O"));
             cmd.Parameters.AddWithValue("@read", header.IsRead ? 1 : 0);
             cmd.Parameters.AddWithValue("@flag", header.IsFlagged ? 1 : 0);
             cmd.Parameters.AddWithValue("@snip", (object?)header.PlainTextSnippet ?? DBNull.Value);

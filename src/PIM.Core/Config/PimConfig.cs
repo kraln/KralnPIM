@@ -49,7 +49,8 @@ public sealed record UiConfig(
 
 public sealed record SystemConfig(
     string? WeatherLocation,
-    string WeatherProvider
+    string WeatherProvider,
+    string? WeatherLocationName = null
 );
 
 public sealed record StorageConfig(

@@ -20,7 +20,7 @@ public class MigrationRunnerTests
         cmd.CommandText = "SELECT COUNT(*) FROM __migrations";
         var count = (long)(await cmd.ExecuteScalarAsync())!;
 
-        Assert.Equal(2, count);
+        Assert.Equal(3, count);
     }
 
     [Fact]
@@ -39,7 +39,7 @@ public class MigrationRunnerTests
         cmd.CommandText = "SELECT COUNT(*) FROM __migrations";
         var count = (long)(await cmd.ExecuteScalarAsync())!;
 
-        Assert.Equal(2, count);
+        Assert.Equal(3, count);
     }
 
     [Fact]

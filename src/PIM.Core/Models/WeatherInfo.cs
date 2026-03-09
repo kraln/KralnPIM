@@ -5,7 +5,8 @@ public sealed record WeatherInfo(
     string Condition,
     int HumidityPercent,
     double WindSpeedKmh,
-    List<DailyForecast> Daily = null!
+    List<DailyForecast> Daily = null!,
+    string? LocationName = null
 );
 
 public sealed record DailyForecast(

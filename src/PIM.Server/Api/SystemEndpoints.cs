@@ -1,4 +1,5 @@
 using PIM.Core.Config;
+using PIM.Core.Models;
 using PIM.Core.Providers;
 using PIM.Server.Models;
 using PIM.Server.Registration;
@@ -34,6 +35,8 @@ internal static class SystemEndpoints
             }
 
             var info = await provider.GetCurrentAsync(lat, lon, ct);
+            if (config.System.WeatherLocationName is { } name)
+                info = info with { LocationName = name };
             return Results.Ok(info);
         });
 
@@ -44,6 +47,12 @@ internal static class SystemEndpoints
                 timezones.Add(config.Ui.TimezoneSecondary);
 
             var info = provider.GetCurrent(timezones);
+
+            // Use the config IDs as labels — the user typed short friendly names
+            // (e.g. "CET", "EST") but TimeZoneInfo.StandardName may return offsets.
+            var zones = info.Zones.Select((z, i) => z with { Label = timezones[i] }).ToList();
+            info = new ClockInfo(zones);
+
             return Results.Ok(info);
         });
 

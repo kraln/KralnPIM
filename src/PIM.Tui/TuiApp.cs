@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using PIM.Core.Models;
 using PIM.Tui.Client;
 using PIM.Tui.Models;
 using PIM.Tui.Views;
@@ -24,6 +25,7 @@ internal sealed class TuiApp : Window
     private readonly PimApiClient _api;
     private readonly PimWsClient _ws;
     private readonly Label _statusLabel;
+    private readonly Label _batteryLabel;
     private readonly DashboardTab _dashboardTab;
     private readonly CalendarTab _calendarTab;
     private readonly EmailTab _emailTab;
@@ -36,7 +38,7 @@ internal sealed class TuiApp : Window
     private View _activeView;
     private int _activeIndex; // 0=Dashboard, 1=Calendar, 2=Email
 
-    public TuiApp(PimApiClient api, PimWsClient ws)
+    public TuiApp(PimApiClient api, PimWsClient ws, TihApiClient? tihClient = null)
     {
         _api = api;
         _ws = ws;
@@ -54,7 +56,7 @@ internal sealed class TuiApp : Window
         });
         SchemeName = "Solarized";
 
-        _dashboardTab = new DashboardTab(api, this);
+        _dashboardTab = new DashboardTab(api, this, tihClient);
         _calendarTab = new CalendarTab(api, this);
         _emailTab = new EmailTab(api, this);
 
@@ -62,9 +64,18 @@ internal sealed class TuiApp : Window
         {
             X = 0,
             Y = Pos.AnchorEnd(1),
-            Width = Dim.Fill(),
+            Width = Dim.Fill(20),
             Height = 1,
             Text = "Ready  [1] Dashboard  [2] Calendar  [3] Email"
+        };
+
+        _batteryLabel = new Label
+        {
+            X = Pos.AnchorEnd(20),
+            Y = Pos.AnchorEnd(1),
+            Width = 20,
+            Height = 1,
+            Text = ""
         };
 
         // Position all views to fill the space above the status bar
@@ -82,7 +93,7 @@ internal sealed class TuiApp : Window
         _calendarTab.Visible = false;
         _emailTab.Visible = false;
 
-        Add(_dashboardTab, _calendarTab, _emailTab, _statusLabel);
+        Add(_dashboardTab, _calendarTab, _emailTab, _statusLabel, _batteryLabel);
 
         // Remove the default Window Esc → QuitToplevel binding
         KeyBindings.Remove(Key.Esc);
@@ -221,6 +232,18 @@ internal sealed class TuiApp : Window
     internal bool IsAccountOnline(string accountId) =>
         !_accountStatus.TryGetValue(accountId, out var online) || online;
 
+    internal void UpdateBattery(PowerInfo? power)
+    {
+        if (power is null || power.BatteryPercent == -1)
+        {
+            _batteryLabel.Text = "";
+            return;
+        }
+
+        var remaining = power.TimeRemaining is not null ? $" ({power.TimeRemaining})" : "";
+        _batteryLabel.Text = $"\u26a1 {power.BatteryPercent}%{remaining}";
+    }
+
     internal void ShowError(string message)
     {
         _statusLabel.Text = $"Error: {message}";
@@ -283,57 +306,79 @@ internal sealed class TuiApp : Window
     {
         var help = _activeIndex switch
         {
-            1 => string.Join("\n", [
-                "Calendar Keys:",
-                "",
-                "  1/2/3       Switch view",
-                "  Up/Down     Move cursor through time",
-                "  Left/Right  Move between day columns",
-                "              (shifts window at edges)",
-                "  Page Up/Dn  Scroll by page",
-                "  T           Jump to current time",
-                "  N           New event at cursor time",
-                "  Enter       Edit event at cursor",
-                "  Q           Quit",
-                "  ?           This help"
+            1 => FormatHelp("Calendar", [
+                ("1/2/3",      "Switch view"),
+                ("Up/Down",    "Move cursor through time"),
+                ("Left/Right", "Move between day columns"),
+                ("",           "(shifts window at edges)"),
+                ("PgUp/PgDn",  "Scroll by page"),
+                ("T",          "Jump to current time"),
+                ("N",          "New event at cursor time"),
+                ("Enter",      "Edit event at cursor"),
+                ("Q",          "Quit"),
+                ("?",          "This help"),
             ]),
-            2 => string.Join("\n", [
-                "Email Keys:",
-                "",
-                "  1/2/3       Switch view",
-                "  Up/Down     Navigate messages",
-                "  Right       Enter reader pane",
-                "  Left/Esc    Back to inbox list",
-                "  N           Compose new email",
-                "  R           Reply to selected",
-                "  U           Filter unread",
-                "  F           Filter flagged",
-                "  Space       Toggle read/unread",
-                "  !           Toggle flag",
-                "  J           Mark as junk",
-                "  D           Download attachment",
-                "  /           Search",
-                "  Q           Quit",
-                "  ?           This help"
+            2 => FormatHelp("Email", [
+                ("1/2/3",      "Switch view"),
+                ("Up/Down",    "Navigate messages"),
+                ("Right",      "Enter reader pane"),
+                ("Left/Esc",   "Back to inbox list"),
+                ("N",          "Compose new email"),
+                ("R",          "Reply to selected"),
+                ("U",          "Filter unread"),
+                ("F",          "Filter flagged"),
+                ("Space",      "Toggle read/unread"),
+                ("!",          "Toggle flag"),
+                ("J",          "Mark as junk"),
+                ("D",          "Download attachment"),
+                ("/",          "Search"),
+                ("Q",          "Quit"),
+                ("?",          "This help"),
             ]),
-            _ => string.Join("\n", [
-                "Dashboard Keys:",
-                "",
-                "  1/2/3       Switch view",
-                "  Up/Down     Navigate lists",
-                "  Q           Quit",
-                "  ?           This help"
-            ])
+            _ => FormatHelp("Dashboard", [
+                ("1/2/3",   "Switch view"),
+                ("Up/Down", "Navigate lists"),
+                ("Q",       "Quit"),
+                ("?",       "This help"),
+            ]),
         };
 
         if (App is not null)
             MessageBox.Query(App, "Help", help, ["OK"]);
     }
 
+    private static string FormatHelp(string title, (string key, string desc)[] entries)
+    {
+        var keyWidth = entries.Where(e => e.key.Length > 0).Max(e => e.key.Length);
+        var lines = new List<string>();
+        var header = $"{title} Keys:";
+        lines.Add(header);
+        lines.Add("");
+        foreach (var (key, desc) in entries)
+        {
+            if (key.Length == 0)
+                lines.Add($"  {new string(' ', keyWidth)}  {desc}");
+            else
+                lines.Add($"  {key.PadRight(keyWidth)}  {desc}");
+        }
+
+        // Pad all lines to the same length so MessageBox doesn't re-wrap
+        var maxLen = lines.Max(l => l.Length);
+        for (var i = 0; i < lines.Count; i++)
+            lines[i] = lines[i].PadRight(maxLen);
+
+        return string.Join("\n", lines);
+    }
+
     private bool IsEditing()
     {
         var focused = MostFocused;
         return focused is TextField or TextView;
+    }
+
+    internal void NotifyMailChanged()
+    {
+        _ = _dashboardTab.RefreshMailOverviewAsync(CancellationToken.None);
     }
 
     private void HandleMailSync(MailSyncEvent evt)
