@@ -18,6 +18,9 @@ var config = ConfigLoader.Load(configPath);
 // 2. Build host
 var builder = WebApplication.CreateSlimBuilder(args);
 builder.Logging.AddConsole();
+builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Warning);
+builder.Logging.AddFilter("Microsoft.Hosting.Lifetime", LogLevel.Warning);
+builder.Logging.AddFilter("System.Net.Http.HttpClient", LogLevel.Warning);
 
 builder.WebHost.ConfigureKestrel(kestrel =>
 {

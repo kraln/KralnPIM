@@ -66,8 +66,11 @@ public sealed class AccountSyncWorker
                     new MailSyncEvent(accountId, result.Upserted.Count, result.Upserted.Select(h => h.MessageId).ToList()),
                     ct);
 
-                _logger.LogInformation("Mail sync for {AccountId}: {Upserted} upserted, {Deleted} deleted",
-                    accountId, result.Upserted.Count, result.DeletedIds.Count);
+                if (result.Upserted.Count > 0 || result.DeletedIds.Count > 0)
+                    _logger.LogInformation("Mail sync for {AccountId}: {Upserted} upserted, {Deleted} deleted",
+                        accountId, result.Upserted.Count, result.DeletedIds.Count);
+                else
+                    _logger.LogDebug("Mail sync for {AccountId}: no changes", accountId);
                 return;
             }
             catch (Exception ex) when (IsAuthFailure(ex))
@@ -117,8 +120,11 @@ public sealed class AccountSyncWorker
                     await _broadcaster.BroadcastAsync(
                         new CalendarSyncEvent(accountId, result.Upserted.Count), ct);
 
-                    _logger.LogInformation("Calendar sync for {AccountId}: {Upserted} upserted, {Deleted} deleted",
-                        accountId, result.Upserted.Count, result.DeletedIds.Count);
+                    if (result.Upserted.Count > 0 || result.DeletedIds.Count > 0)
+                        _logger.LogInformation("Calendar sync for {AccountId}: {Upserted} upserted, {Deleted} deleted",
+                            accountId, result.Upserted.Count, result.DeletedIds.Count);
+                    else
+                        _logger.LogDebug("Calendar sync for {AccountId}: no changes", accountId);
                     break;
                 }
                 catch (Exception ex) when (IsAuthFailure(ex))
