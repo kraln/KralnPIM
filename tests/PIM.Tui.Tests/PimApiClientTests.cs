@@ -154,7 +154,7 @@ public sealed class PimApiClientTests : IDisposable
     public async Task GetStatusAsync_ReturnsSystemStatus()
     {
         var status = new SystemStatus([
-            new AccountStatusInfo("acct-1", "Personal", true, DateTimeOffset.UtcNow)
+            new AccountStatusInfo("acct-1", "Personal", true, null, DateTimeOffset.UtcNow)
         ]);
 
         using var client = CreateClient(HttpStatusCode.OK, JsonSerializer.Serialize(status, _json));

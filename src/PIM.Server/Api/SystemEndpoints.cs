@@ -58,11 +58,17 @@ internal static class SystemEndpoints
 
         group.MapGet("/status", (ProviderRegistry registry, AccountStatusTracker tracker, PimConfig config) =>
         {
-            var accounts = config.Accounts.Select(a => new AccountStatusInfo(
-                a.Id,
-                a.DisplayName,
-                tracker.IsOnline(a.Id),
-                null)).ToList();
+            var accounts = config.Accounts.Select(a =>
+            {
+                var online = tracker.IsOnline(a.Id);
+                var reason = online ? null : tracker.GetOfflineReason(a.Id) switch
+                {
+                    Services.OfflineReason.AuthRequired => "auth_required",
+                    Services.OfflineReason.Error => "error",
+                    _ => null,
+                };
+                return new AccountStatusInfo(a.Id, a.DisplayName, online, reason, null);
+            }).ToList();
 
             return Results.Ok(new SystemStatus(accounts));
         });

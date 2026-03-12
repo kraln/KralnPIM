@@ -340,9 +340,17 @@ public sealed class GoogleMailProvider : IMailProvider
         // for us — Body.Data is always the raw decoded bytes in the part's charset.
         var raw = DecodeBase64UrlBytes(part.Body!.Data!);
         var charset = GetCharset(part);
-        var encoding = charset.Equals("utf-8", StringComparison.OrdinalIgnoreCase)
-            ? Encoding.UTF8
-            : Encoding.GetEncoding(charset);
+        Encoding encoding;
+        if (charset.Equals("utf-8", StringComparison.OrdinalIgnoreCase))
+        {
+            encoding = Encoding.UTF8;
+        }
+        else
+        {
+            // Legacy code pages (Windows-1252, ISO-8859-*, etc.) require registration
+            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+            encoding = Encoding.GetEncoding(charset);
+        }
         return encoding.GetString(raw);
     }
 

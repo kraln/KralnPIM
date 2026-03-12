@@ -30,6 +30,7 @@ internal sealed class TuiApp : Window
     private readonly CalendarTab _calendarTab;
     private readonly EmailTab _emailTab;
     private readonly Dictionary<string, bool> _accountStatus = new();
+    private readonly Dictionary<string, string?> _accountOfflineReasons = new();
     private readonly Dictionary<string, string?> _accountColors = new();
     private readonly Dictionary<string, Color> _resolvedAccountColors = new();
     private int _nextPaletteIdx;
@@ -232,6 +233,9 @@ internal sealed class TuiApp : Window
     internal bool IsAccountOnline(string accountId) =>
         !_accountStatus.TryGetValue(accountId, out var online) || online;
 
+    internal string? GetAccountOfflineReason(string accountId) =>
+        _accountOfflineReasons.GetValueOrDefault(accountId);
+
     internal void UpdateBattery(PowerInfo? power)
     {
         if (power is null || power.BatteryPercent == -1)
@@ -396,7 +400,8 @@ internal sealed class TuiApp : Window
     private void HandleStatusChange(StatusChangeEvent evt)
     {
         _accountStatus[evt.AccountId] = evt.Online;
-        var status = evt.Online ? "online" : "OFFLINE";
+        _accountOfflineReasons[evt.AccountId] = evt.Online ? null : evt.Reason;
+        var status = evt.Online ? "online" : evt.Reason == "auth_required" ? "OFFLINE (re-auth required)" : "OFFLINE";
         ShowStatus($"Account '{evt.AccountId}' is now {status}");
         _dashboardTab.UpdateAccountStatus(evt.AccountId, evt.Online);
         _emailTab.UpdateAccountStatus(evt.AccountId, evt.Online);

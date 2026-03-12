@@ -245,8 +245,11 @@ internal sealed class EmailTab : View
         // Refresh stale data when inbox regains focus
         _emailList.HasFocusChanged += (_, e) =>
         {
-            if (e.NewValue && _staleInbox)
+            if (!e.NewValue) return;
+            if (_staleInbox)
                 _ = RefreshInboxAsync(CancellationToken.None, force: true);
+            else if (_currentDetail is null && _emailList.SelectedEmail is { } sel)
+                _ = SelectEmailAsync(sel);
         };
 
         // Key handlers on the email list (fires after EmailListView's own handler)

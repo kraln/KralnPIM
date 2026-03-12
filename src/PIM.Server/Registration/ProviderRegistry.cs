@@ -66,10 +66,15 @@ public class ProviderRegistry
                 await provider.AuthenticateAsync(ct);
                 statusTracker.MarkOnline(accountId);
             }
+            catch (ReauthorizationRequiredException)
+            {
+                _logger.LogWarning("Account {AccountId} requires re-authorization for mail", accountId);
+                statusTracker.MarkOffline(accountId, OfflineReason.AuthRequired);
+            }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 _logger.LogError(ex, "Failed to authenticate mail provider for {AccountId}, marking offline", accountId);
-                statusTracker.MarkOffline(accountId);
+                statusTracker.MarkOffline(accountId, OfflineReason.Error);
             }
         }
 
@@ -83,10 +88,15 @@ public class ProviderRegistry
                     await provider.AuthenticateAsync(ct);
                     statusTracker.MarkOnline(accountId);
                 }
+                catch (ReauthorizationRequiredException)
+                {
+                    _logger.LogWarning("Account {AccountId} requires re-authorization for calendar", accountId);
+                    statusTracker.MarkOffline(accountId, OfflineReason.AuthRequired);
+                }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     _logger.LogError(ex, "Failed to authenticate calendar provider for {AccountId}, marking offline", accountId);
-                    statusTracker.MarkOffline(accountId);
+                    statusTracker.MarkOffline(accountId, OfflineReason.Error);
                 }
             }
         }

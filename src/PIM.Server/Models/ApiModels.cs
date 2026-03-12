@@ -25,4 +25,5 @@ public sealed record AccountStatusInfo(
     string AccountId,
     string DisplayName,
     bool Online,
+    string? OfflineReason,
     DateTimeOffset? LastSync);

@@ -13,4 +13,5 @@ public sealed record CalendarSyncEvent(
 
 public sealed record StatusChangeEvent(
     string AccountId,
-    bool Online) : WsEvent("status.change", AccountId);
+    bool Online,
+    string? Reason = null) : WsEvent("status.change", AccountId);

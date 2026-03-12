@@ -5,6 +5,7 @@ using Google.Apis.Calendar.v3;
 using Google.Apis.Gmail.v1;
 using Microsoft.Extensions.Logging;
 using PIM.Core.Data;
+using PIM.Core.Providers;
 
 namespace PIM.Sync.Google;
 
@@ -35,16 +36,21 @@ public sealed class GoogleCredentialManager
     {
         if (_credential is not null)
         {
+            if (!_credential.Token.IsStale)
+                return _credential;
+
             // Attempt to refresh if the token is expired
-            if (_credential.Token.IsStale)
+            try
             {
                 var refreshed = await _credential.RefreshTokenAsync(ct);
                 if (refreshed)
                     return _credential;
             }
-            else
+            catch (TokenResponseException ex) when (IsTokenRevoked(ex))
             {
-                return _credential;
+                _logger.LogWarning("Token revoked for {AccountId}, clearing credential", _accountId);
+                _credential = null;
+                throw new ReauthorizationRequiredException(_accountId, ex);
             }
         }
 
@@ -78,9 +84,19 @@ public sealed class GoogleCredentialManager
 
             _credential = new UserCredential(flow, _accountId, tokenResponse);
 
-            // Refresh if token is expired
             if (_credential.Token.IsStale)
-                await _credential.RefreshTokenAsync(ct);
+            {
+                try
+                {
+                    await _credential.RefreshTokenAsync(ct);
+                }
+                catch (TokenResponseException ex) when (IsTokenRevoked(ex))
+                {
+                    _logger.LogWarning("Stored token revoked for {AccountId}, clearing credential", _accountId);
+                    _credential = null;
+                    throw new ReauthorizationRequiredException(_accountId, ex);
+                }
+            }
 
             return _credential;
         }
@@ -91,4 +107,7 @@ public sealed class GoogleCredentialManager
 
         return _credential;
     }
+
+    private static bool IsTokenRevoked(TokenResponseException ex) =>
+        ex.Error?.Error is "invalid_grant";
 }

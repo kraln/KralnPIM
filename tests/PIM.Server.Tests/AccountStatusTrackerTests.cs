@@ -47,4 +47,40 @@ public class AccountStatusTrackerTests
         _tracker.MarkOnline("acc-1");
         Assert.True(_tracker.IsOnline("acc-1"));
     }
+
+    [Fact]
+    public void MarkOffline_WithAuthRequired_TracksReason()
+    {
+        _tracker.MarkOffline("acc-1", OfflineReason.AuthRequired);
+        Assert.False(_tracker.IsOnline("acc-1"));
+        Assert.Equal(OfflineReason.AuthRequired, _tracker.GetOfflineReason("acc-1"));
+    }
+
+    [Fact]
+    public void MarkOffline_WithError_TracksReason()
+    {
+        _tracker.MarkOffline("acc-1", OfflineReason.Error);
+        Assert.Equal(OfflineReason.Error, _tracker.GetOfflineReason("acc-1"));
+    }
+
+    [Fact]
+    public void MarkOffline_DefaultReason_IsError()
+    {
+        _tracker.MarkOffline("acc-1");
+        Assert.Equal(OfflineReason.Error, _tracker.GetOfflineReason("acc-1"));
+    }
+
+    [Fact]
+    public void MarkOnline_ClearsOfflineReason()
+    {
+        _tracker.MarkOffline("acc-1", OfflineReason.AuthRequired);
+        _tracker.MarkOnline("acc-1");
+        Assert.Equal(OfflineReason.None, _tracker.GetOfflineReason("acc-1"));
+    }
+
+    [Fact]
+    public void UnknownAccount_ReasonIsNone()
+    {
+        Assert.Equal(OfflineReason.None, _tracker.GetOfflineReason("nonexistent"));
+    }
 }

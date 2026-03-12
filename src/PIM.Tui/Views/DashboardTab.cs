@@ -396,7 +396,8 @@ internal sealed class DashboardTab : View
                 var textFg = disabled ? Sol.Base01 : fg;
                 SetAttribute(new GuiAttribute(textFg, bg));
 
-                var status = _app.IsAccountOnline(a.Id) ? "" : " [OFFLINE]";
+                var offlineTag = _app.GetAccountOfflineReason(a.Id) == "auth_required" ? " [RE-AUTH]" : " [OFFLINE]";
+                var status = _app.IsAccountOnline(a.Id) ? "" : offlineTag;
                 var text = $"{a.DisplayName} ({a.Type}){status}  U:{a.UnreadCount} F:{a.FlaggedCount}";
                 if (text.Length > width - 2)
                     text = text[..(width - 2)];

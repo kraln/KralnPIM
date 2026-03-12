@@ -91,7 +91,80 @@ public class AccountSyncWorkerTests
         await worker.SyncAsync("acc-1", CancellationToken.None);
 
         Assert.False(_statusTracker.IsOnline("acc-1"));
+        Assert.Equal(OfflineReason.AuthRequired, _statusTracker.GetOfflineReason("acc-1"));
         // Should only be called once (no retries for auth failures)
+        await _mailProvider.Received(1).SyncMailAsync(
+            Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Sync_ReauthorizationRequired_MarksAuthRequired()
+    {
+        _mailProvider.SyncMailAsync(Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
+            .Throws(new ReauthorizationRequiredException("acc-1"));
+
+        var worker = CreateWorker();
+        await worker.SyncAsync("acc-1", CancellationToken.None);
+
+        Assert.False(_statusTracker.IsOnline("acc-1"));
+        Assert.Equal(OfflineReason.AuthRequired, _statusTracker.GetOfflineReason("acc-1"));
+    }
+
+    [Fact]
+    public async Task Sync_OfflineAuthRequired_RetriesAuth_SkipsOnFailure()
+    {
+        // Pre-mark offline with auth required
+        _statusTracker.MarkOffline("acc-1", OfflineReason.AuthRequired);
+
+        _mailProvider.When(p => p.AuthenticateAsync(Arg.Any<CancellationToken>()))
+            .Throw(new ReauthorizationRequiredException("acc-1"));
+
+        var worker = CreateWorker();
+        await worker.SyncAsync("acc-1", CancellationToken.None);
+
+        // Should have tried to re-auth but failed — no sync calls
+        await _mailProvider.Received(1).AuthenticateAsync(Arg.Any<CancellationToken>());
+        await _mailProvider.DidNotReceive().SyncMailAsync(
+            Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Sync_OfflineAuthRequired_RetriesAuth_ResumesOnSuccess()
+    {
+        // Pre-mark offline with auth required
+        _statusTracker.MarkOffline("acc-1", OfflineReason.AuthRequired);
+
+        _mailProvider.SyncMailAsync(Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
+            .Returns(new SyncResult<EmailHeader>([], [], null));
+        _calendarProvider.SyncEventsAsync(Arg.Any<DateTimeOffset>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
+            .Returns(new SyncResult<CalendarEvent>([], [], null));
+
+        var worker = CreateWorker();
+        await worker.SyncAsync("acc-1", CancellationToken.None);
+
+        // Should have re-authed and then synced
+        await _mailProvider.Received(1).AuthenticateAsync(Arg.Any<CancellationToken>());
+        await _mailProvider.Received(1).SyncMailAsync(
+            Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>());
+        Assert.True(_statusTracker.IsOnline("acc-1"));
+    }
+
+    [Fact]
+    public async Task Sync_OfflineError_DoesNotRetryAuth()
+    {
+        // Offline due to generic error — should not retry auth
+        _statusTracker.MarkOffline("acc-1", OfflineReason.Error);
+
+        _mailProvider.SyncMailAsync(Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
+            .Returns(new SyncResult<EmailHeader>([], [], null));
+        _calendarProvider.SyncEventsAsync(Arg.Any<DateTimeOffset>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
+            .Returns(new SyncResult<CalendarEvent>([], [], null));
+
+        var worker = CreateWorker();
+        await worker.SyncAsync("acc-1", CancellationToken.None);
+
+        // Should proceed to sync directly without re-auth attempt
+        await _mailProvider.DidNotReceive().AuthenticateAsync(Arg.Any<CancellationToken>());
         await _mailProvider.Received(1).SyncMailAsync(
             Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>());
     }

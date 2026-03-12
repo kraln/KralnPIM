@@ -39,9 +39,49 @@ public sealed class AccountSyncWorker
 
     public async Task SyncAsync(string accountId, CancellationToken ct)
     {
+        // If the account is offline due to auth, attempt re-authentication before syncing
+        if (!_statusTracker.IsOnline(accountId))
+        {
+            if (_statusTracker.GetOfflineReason(accountId) == OfflineReason.AuthRequired)
+            {
+                if (!await TryReauthenticateAsync(accountId, ct))
+                    return;
+            }
+        }
+
         await SyncMailAsync(accountId, ct);
         await SyncCalendarsAsync(accountId, ct);
         await PurgeOldDataAsync(ct);
+    }
+
+    private async Task<bool> TryReauthenticateAsync(string accountId, CancellationToken ct)
+    {
+        var mailProvider = _registry.GetMailProvider(accountId);
+        var calProviders = _registry.GetCalendarProviders(accountId);
+
+        try
+        {
+            if (mailProvider is not null)
+                await mailProvider.AuthenticateAsync(ct);
+
+            foreach (var calProvider in calProviders)
+                await calProvider.AuthenticateAsync(ct);
+
+            _logger.LogInformation("Re-authentication succeeded for {AccountId}", accountId);
+            _statusTracker.MarkOnline(accountId);
+            await _broadcaster.BroadcastAsync(new StatusChangeEvent(accountId, true), ct);
+            return true;
+        }
+        catch (ReauthorizationRequiredException)
+        {
+            _logger.LogDebug("Account {AccountId} still requires re-authorization", accountId);
+            return false;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogDebug(ex, "Re-authentication attempt failed for {AccountId}", accountId);
+            return false;
+        }
     }
 
     private async Task SyncMailAsync(string accountId, CancellationToken ct)
@@ -73,11 +113,18 @@ public sealed class AccountSyncWorker
                     _logger.LogDebug("Mail sync for {AccountId}: no changes", accountId);
                 return;
             }
+            catch (ReauthorizationRequiredException)
+            {
+                _logger.LogWarning("Account {AccountId} requires re-authorization, marking offline", accountId);
+                _statusTracker.MarkOffline(accountId, OfflineReason.AuthRequired);
+                await _broadcaster.BroadcastAsync(new StatusChangeEvent(accountId, false, "auth_required"), ct);
+                return;
+            }
             catch (Exception ex) when (IsAuthFailure(ex))
             {
                 _logger.LogError(ex, "Auth failure for mail sync on {AccountId}, marking offline", accountId);
-                _statusTracker.MarkOffline(accountId);
-                await _broadcaster.BroadcastAsync(new StatusChangeEvent(accountId, false), ct);
+                _statusTracker.MarkOffline(accountId, OfflineReason.AuthRequired);
+                await _broadcaster.BroadcastAsync(new StatusChangeEvent(accountId, false, "auth_required"), ct);
                 return;
             }
             catch (Exception ex) when (attempt < MaxRetries)
@@ -91,8 +138,8 @@ public sealed class AccountSyncWorker
             {
                 _logger.LogError(ex, "Mail sync failed after {Max} attempts for {AccountId}, marking offline",
                     MaxRetries, accountId);
-                _statusTracker.MarkOffline(accountId);
-                await _broadcaster.BroadcastAsync(new StatusChangeEvent(accountId, false), ct);
+                _statusTracker.MarkOffline(accountId, OfflineReason.Error);
+                await _broadcaster.BroadcastAsync(new StatusChangeEvent(accountId, false, "error"), ct);
             }
         }
     }
@@ -127,9 +174,18 @@ public sealed class AccountSyncWorker
                         _logger.LogDebug("Calendar sync for {AccountId}: no changes", accountId);
                     break;
                 }
+                catch (ReauthorizationRequiredException)
+                {
+                    _logger.LogWarning("Account {AccountId} requires re-authorization for calendar sync", accountId);
+                    _statusTracker.MarkOffline(accountId, OfflineReason.AuthRequired);
+                    await _broadcaster.BroadcastAsync(new StatusChangeEvent(accountId, false, "auth_required"), ct);
+                    break;
+                }
                 catch (Exception ex) when (IsAuthFailure(ex))
                 {
                     _logger.LogError(ex, "Auth failure for calendar sync on {AccountId}", accountId);
+                    _statusTracker.MarkOffline(accountId, OfflineReason.AuthRequired);
+                    await _broadcaster.BroadcastAsync(new StatusChangeEvent(accountId, false, "auth_required"), ct);
                     break;
                 }
                 catch (Exception ex) when (attempt < MaxRetries)

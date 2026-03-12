@@ -16,4 +16,5 @@ public sealed record CalendarSyncEvent(
 public sealed record StatusChangeEvent(
     string Type,
     string AccountId,
-    bool Online);
+    bool Online,
+    string? Reason = null);
