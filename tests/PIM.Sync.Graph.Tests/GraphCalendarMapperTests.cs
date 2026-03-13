@@ -287,6 +287,415 @@ public class GraphCalendarMapperTests
         Assert.Null(result.Location);
     }
 
+    // --- ParseTimeZone edge cases ---
+
+    [Fact]
+    public void ToCalendarEvent_EmptyTimeZone_FallsBackToUtc()
+    {
+        var evt = new GraphEvent
+        {
+            Id = "tz1",
+            Subject = "Empty TZ",
+            IsCancelled = false,
+            Start = new GraphDateTimeTimeZone { DateTime = "2024-06-15T10:00:00", TimeZone = "" },
+            End = new GraphDateTimeTimeZone { DateTime = "2024-06-15T11:00:00", TimeZone = "" },
+        };
+
+        var result = GraphCalendarMapper.ToCalendarEvent(evt, AccountId, CalendarId);
+
+        Assert.Equal(TimeSpan.Zero, result.Start.Offset);
+        Assert.Equal(10, result.Start.Hour);
+        Assert.Equal(TimeSpan.Zero, result.End.Offset);
+    }
+
+    [Fact]
+    public void ToCalendarEvent_NullTimeZone_FallsBackToUtc()
+    {
+        var evt = new GraphEvent
+        {
+            Id = "tz2",
+            Subject = "Null TZ",
+            IsCancelled = false,
+            Start = new GraphDateTimeTimeZone { DateTime = "2024-06-15T10:00:00", TimeZone = null },
+            End = new GraphDateTimeTimeZone { DateTime = "2024-06-15T11:00:00", TimeZone = null },
+        };
+
+        var result = GraphCalendarMapper.ToCalendarEvent(evt, AccountId, CalendarId);
+
+        Assert.Equal(TimeSpan.Zero, result.Start.Offset);
+        Assert.Equal(10, result.Start.Hour);
+    }
+
+    [Fact]
+    public void ToCalendarEvent_InvalidTimeZone_FallsBackToUtc()
+    {
+        var evt = new GraphEvent
+        {
+            Id = "tz3",
+            Subject = "Invalid TZ",
+            IsCancelled = false,
+            Start = new GraphDateTimeTimeZone { DateTime = "2024-06-15T10:00:00", TimeZone = "Not/A/Real/Timezone" },
+            End = new GraphDateTimeTimeZone { DateTime = "2024-06-15T11:00:00", TimeZone = "Not/A/Real/Timezone" },
+        };
+
+        var result = GraphCalendarMapper.ToCalendarEvent(evt, AccountId, CalendarId);
+
+        Assert.Equal(TimeSpan.Zero, result.Start.Offset);
+        Assert.Equal(10, result.Start.Hour);
+        Assert.Equal(TimeSpan.Zero, result.End.Offset);
+    }
+
+    // --- Implicit all-day detection ---
+
+    [Fact]
+    public void ToCalendarEvent_MidnightToMidnight_DetectedAsAllDay()
+    {
+        var evt = new GraphEvent
+        {
+            Id = "ad1",
+            Subject = "Implicit All Day",
+            IsAllDay = false,
+            IsCancelled = false,
+            Start = new GraphDateTimeTimeZone
+            {
+                DateTime = "2024-06-15T00:00:00.0000000",
+                TimeZone = "UTC",
+            },
+            End = new GraphDateTimeTimeZone
+            {
+                DateTime = "2024-06-16T00:00:00.0000000",
+                TimeZone = "UTC",
+            },
+        };
+
+        var result = GraphCalendarMapper.ToCalendarEvent(evt, AccountId, CalendarId);
+
+        Assert.True(result.IsAllDay);
+        Assert.Equal(15, result.Start.Day);
+        Assert.Equal(16, result.End.Day);
+    }
+
+    // --- Null start/end edge cases ---
+
+    [Fact]
+    public void ToCalendarEvent_NullStart_ReturnsMinValue()
+    {
+        var evt = new GraphEvent
+        {
+            Id = "ns1",
+            Subject = "No Start",
+            IsCancelled = false,
+            Start = null,
+            End = new GraphDateTimeTimeZone { DateTime = "2024-06-15T11:00:00", TimeZone = "UTC" },
+        };
+
+        var result = GraphCalendarMapper.ToCalendarEvent(evt, AccountId, CalendarId);
+
+        Assert.Equal(DateTimeOffset.MinValue, result.Start);
+    }
+
+    [Fact]
+    public void ToCalendarEvent_NullEnd_ReturnsMinValue()
+    {
+        var evt = new GraphEvent
+        {
+            Id = "ne1",
+            Subject = "No End",
+            IsCancelled = false,
+            Start = new GraphDateTimeTimeZone { DateTime = "2024-06-15T10:00:00", TimeZone = "UTC" },
+            End = null,
+        };
+
+        var result = GraphCalendarMapper.ToCalendarEvent(evt, AccountId, CalendarId);
+
+        Assert.Equal(DateTimeOffset.MinValue, result.End);
+    }
+
+    // --- Empty attendees list ---
+
+    [Fact]
+    public void ToCalendarEvent_EmptyAttendeesList_EmptyInvitees()
+    {
+        var evt = new GraphEvent
+        {
+            Id = "ea1",
+            Subject = "No Attendees",
+            IsCancelled = false,
+            Start = new GraphDateTimeTimeZone { DateTime = "2024-06-15T10:00:00", TimeZone = "UTC" },
+            End = new GraphDateTimeTimeZone { DateTime = "2024-06-15T11:00:00", TimeZone = "UTC" },
+            Attendees = [],
+        };
+
+        var result = GraphCalendarMapper.ToCalendarEvent(evt, AccountId, CalendarId);
+
+        Assert.Empty(result.Invitees);
+    }
+
+    // --- RRULE conversion: RelativeMonthly ---
+
+    [Fact]
+    public void ConvertRecurrenceToRRule_RelativeMonthly_ProducesMonthlyWithByDay()
+    {
+        var recurrence = new GraphPatternedRecurrence
+        {
+            Pattern = new GraphRecurrencePattern
+            {
+                Type = Microsoft.Graph.Models.RecurrencePatternType.RelativeMonthly,
+                Interval = 1,
+                DaysOfWeek = [Microsoft.Graph.Models.DayOfWeekObject.Monday],
+            },
+            Range = new GraphRecurrenceRange
+            {
+                Type = Microsoft.Graph.Models.RecurrenceRangeType.NoEnd,
+            },
+        };
+
+        var result = GraphCalendarMapper.ConvertRecurrenceToRRule(recurrence);
+
+        Assert.NotNull(result);
+        Assert.Contains("FREQ=MONTHLY", result);
+        Assert.Contains("BYDAY=MO", result);
+        Assert.DoesNotContain("BYMONTHDAY", result);
+    }
+
+    [Fact]
+    public void ConvertRRuleToRecurrence_MonthlyWithByDay_ProducesRelativeMonthly()
+    {
+        var result = GraphCalendarMapper.ConvertRRuleToRecurrence("RRULE:FREQ=MONTHLY;BYDAY=MO");
+
+        Assert.NotNull(result);
+        Assert.Equal(Microsoft.Graph.Models.RecurrencePatternType.RelativeMonthly,
+            result.Pattern?.Type);
+        Assert.Contains(Microsoft.Graph.Models.DayOfWeekObject.Monday,
+            result.Pattern!.DaysOfWeek!);
+    }
+
+    // --- RRULE conversion: UNTIL date ---
+
+    [Fact]
+    public void ConvertRecurrenceToRRule_EndDateRange_ProducesUntil()
+    {
+        var recurrence = new GraphPatternedRecurrence
+        {
+            Pattern = new GraphRecurrencePattern
+            {
+                Type = Microsoft.Graph.Models.RecurrencePatternType.Daily,
+                Interval = 1,
+            },
+            Range = new GraphRecurrenceRange
+            {
+                Type = Microsoft.Graph.Models.RecurrenceRangeType.EndDate,
+                EndDate = new Microsoft.Kiota.Abstractions.Date(2024, 12, 31),
+            },
+        };
+
+        var result = GraphCalendarMapper.ConvertRecurrenceToRRule(recurrence);
+
+        Assert.NotNull(result);
+        Assert.Contains("FREQ=DAILY", result);
+        Assert.Contains("UNTIL=20241231", result);
+    }
+
+    [Fact]
+    public void ConvertRRuleToRecurrence_WithUntil_ProducesEndDateRange()
+    {
+        var result = GraphCalendarMapper.ConvertRRuleToRecurrence("RRULE:FREQ=DAILY;UNTIL=20241231");
+
+        Assert.NotNull(result);
+        Assert.Equal(Microsoft.Graph.Models.RecurrenceRangeType.EndDate, result.Range?.Type);
+        Assert.NotNull(result.Range?.EndDate);
+        var ed = result.Range!.EndDate!.Value;
+        Assert.Equal(2024, ed.Year);
+        Assert.Equal(12, ed.Month);
+        Assert.Equal(31, ed.Day);
+    }
+
+    [Fact]
+    public void ConvertRRuleToRecurrence_InvalidUntilFormat_FallsBackToNoEnd()
+    {
+        var result = GraphCalendarMapper.ConvertRRuleToRecurrence("RRULE:FREQ=DAILY;UNTIL=not-a-date");
+
+        Assert.NotNull(result);
+        Assert.Equal(Microsoft.Graph.Models.RecurrenceRangeType.NoEnd, result.Range?.Type);
+    }
+
+    // --- RRULE conversion: AbsoluteYearly with BYMONTH ---
+
+    [Fact]
+    public void ConvertRecurrenceToRRule_AbsoluteYearly_ProducesYearlyWithByMonth()
+    {
+        var recurrence = new GraphPatternedRecurrence
+        {
+            Pattern = new GraphRecurrencePattern
+            {
+                Type = Microsoft.Graph.Models.RecurrencePatternType.AbsoluteYearly,
+                Interval = 1,
+                DayOfMonth = 25,
+                Month = 12,
+            },
+            Range = new GraphRecurrenceRange
+            {
+                Type = Microsoft.Graph.Models.RecurrenceRangeType.NoEnd,
+            },
+        };
+
+        var result = GraphCalendarMapper.ConvertRecurrenceToRRule(recurrence);
+
+        Assert.NotNull(result);
+        Assert.Contains("FREQ=YEARLY", result);
+        Assert.Contains("BYMONTHDAY=25", result);
+        Assert.Contains("BYMONTH=12", result);
+    }
+
+    // --- RRULE conversion: RelativeYearly ---
+
+    [Fact]
+    public void ConvertRecurrenceToRRule_RelativeYearly_ProducesYearlyWithByDayAndMonth()
+    {
+        var recurrence = new GraphPatternedRecurrence
+        {
+            Pattern = new GraphRecurrencePattern
+            {
+                Type = Microsoft.Graph.Models.RecurrencePatternType.RelativeYearly,
+                Interval = 1,
+                DaysOfWeek = [Microsoft.Graph.Models.DayOfWeekObject.Thursday],
+                Month = 11,
+            },
+            Range = new GraphRecurrenceRange
+            {
+                Type = Microsoft.Graph.Models.RecurrenceRangeType.NoEnd,
+            },
+        };
+
+        var result = GraphCalendarMapper.ConvertRecurrenceToRRule(recurrence);
+
+        Assert.NotNull(result);
+        Assert.Contains("FREQ=YEARLY", result);
+        Assert.Contains("BYDAY=TH", result);
+        Assert.Contains("BYMONTH=11", result);
+    }
+
+    [Fact]
+    public void ConvertRRuleToRecurrence_YearlyWithByDayAndMonth_ProducesRelativeYearly()
+    {
+        var result = GraphCalendarMapper.ConvertRRuleToRecurrence("RRULE:FREQ=YEARLY;BYDAY=TH;BYMONTH=11");
+
+        Assert.NotNull(result);
+        Assert.Equal(Microsoft.Graph.Models.RecurrencePatternType.RelativeYearly,
+            result.Pattern?.Type);
+        Assert.Contains(Microsoft.Graph.Models.DayOfWeekObject.Thursday,
+            result.Pattern!.DaysOfWeek!);
+        Assert.Equal(11, result.Pattern.Month);
+    }
+
+    // --- RRULE conversion: Interval handling ---
+
+    [Fact]
+    public void ConvertRecurrenceToRRule_IntervalGreaterThanOne_IncludesInterval()
+    {
+        var recurrence = new GraphPatternedRecurrence
+        {
+            Pattern = new GraphRecurrencePattern
+            {
+                Type = Microsoft.Graph.Models.RecurrencePatternType.Daily,
+                Interval = 3,
+            },
+            Range = new GraphRecurrenceRange
+            {
+                Type = Microsoft.Graph.Models.RecurrenceRangeType.NoEnd,
+            },
+        };
+
+        var result = GraphCalendarMapper.ConvertRecurrenceToRRule(recurrence);
+
+        Assert.NotNull(result);
+        Assert.Contains("INTERVAL=3", result);
+    }
+
+    [Fact]
+    public void ConvertRecurrenceToRRule_IntervalOne_OmitsInterval()
+    {
+        var recurrence = new GraphPatternedRecurrence
+        {
+            Pattern = new GraphRecurrencePattern
+            {
+                Type = Microsoft.Graph.Models.RecurrencePatternType.Daily,
+                Interval = 1,
+            },
+            Range = new GraphRecurrenceRange
+            {
+                Type = Microsoft.Graph.Models.RecurrenceRangeType.NoEnd,
+            },
+        };
+
+        var result = GraphCalendarMapper.ConvertRecurrenceToRRule(recurrence);
+
+        Assert.NotNull(result);
+        Assert.DoesNotContain("INTERVAL", result);
+    }
+
+    // --- RRULE conversion: BYMONTHDAY round-trip ---
+
+    [Fact]
+    public void ConvertRRuleToRecurrence_WithByMonthDay_SetsDayOfMonth()
+    {
+        var result = GraphCalendarMapper.ConvertRRuleToRecurrence("RRULE:FREQ=MONTHLY;BYMONTHDAY=15");
+
+        Assert.NotNull(result);
+        Assert.Equal(Microsoft.Graph.Models.RecurrencePatternType.AbsoluteMonthly,
+            result.Pattern?.Type);
+        Assert.Equal(15, result.Pattern?.DayOfMonth);
+    }
+
+    // --- RRULE conversion: null/missing pattern ---
+
+    [Fact]
+    public void ConvertRecurrenceToRRule_NullPattern_ReturnsNull()
+    {
+        var recurrence = new GraphPatternedRecurrence { Pattern = null };
+
+        var result = GraphCalendarMapper.ConvertRecurrenceToRRule(recurrence);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void ConvertRRuleToRecurrence_NoFreq_ReturnsNull()
+    {
+        var result = GraphCalendarMapper.ConvertRRuleToRecurrence("RRULE:INTERVAL=2");
+
+        Assert.Null(result);
+    }
+
+    // --- ToGraphEvent: body and location mapping ---
+
+    [Fact]
+    public void ToGraphEvent_WithDescription_SetsBodyContent()
+    {
+        var evt = new CalendarEvent(
+            EventId: "bd1",
+            AccountId: AccountId,
+            CalendarId: CalendarId,
+            Summary: "Has Desc",
+            Description: "Meeting notes here",
+            Start: new DateTimeOffset(2024, 6, 15, 10, 0, 0, TimeSpan.Zero),
+            End: new DateTimeOffset(2024, 6, 15, 11, 0, 0, TimeSpan.Zero),
+            IsAllDay: false,
+            Location: "Room 5",
+            Invitees: [],
+            RecurrenceRule: null,
+            Status: EventStatus.Confirmed
+        );
+
+        var result = GraphCalendarMapper.ToGraphEvent(evt);
+
+        Assert.NotNull(result.Body);
+        Assert.Equal("Meeting notes here", result.Body.Content);
+        Assert.Equal(Microsoft.Graph.Models.BodyType.Text, result.Body.ContentType);
+        Assert.NotNull(result.Location);
+        Assert.Equal("Room 5", result.Location.DisplayName);
+    }
+
     // --- ToGraphEvent tests ---
 
     [Fact]

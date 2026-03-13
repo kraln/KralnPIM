@@ -152,7 +152,7 @@ internal sealed class DashboardTab : View
         _app.App?.Invoke(() =>
         {
             _agendaFrame.Title = "Agenda";
-            _agendaList.SetRows(AgendaListView.BuildRows(_todayEvents, today));
+            _agendaList.SetRows(AgendaRowBuilder.BuildRows(_todayEvents, today));
         });
     }
 

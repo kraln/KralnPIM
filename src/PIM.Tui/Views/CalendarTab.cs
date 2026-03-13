@@ -140,7 +140,7 @@ internal sealed class CalendarTab : View
         _app.App?.Invoke(() =>
         {
             _agendaFrame.Title = "Upcoming";
-            _agendaList.SetRows(AgendaListView.BuildRows(_todayEvents, today));
+            _agendaList.SetRows(AgendaRowBuilder.BuildRows(_todayEvents, today));
         });
     }
 
@@ -191,6 +191,6 @@ internal sealed class CalendarTab : View
             .ToList();
 
         _agendaFrame.Title = $"{date:ddd MMM d}";
-        _agendaList.SetRows(AgendaListView.BuildRows(dayEvents, date));
+        _agendaList.SetRows(AgendaRowBuilder.BuildRows(dayEvents, date));
     }
 }
