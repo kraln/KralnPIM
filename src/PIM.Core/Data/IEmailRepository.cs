@@ -14,4 +14,5 @@ public interface IEmailRepository
     Task DeleteAsync(string messageId, CancellationToken ct = default);
     Task PurgeOlderThanAsync(DateTimeOffset cutoff, CancellationToken ct = default);
     Task<List<EmailHeader>> SearchAsync(string query, int limit, CancellationToken ct = default);
+    Task<Dictionary<string, (int Unread, int Flagged)>> GetAccountCountsAsync(CancellationToken ct = default);
 }

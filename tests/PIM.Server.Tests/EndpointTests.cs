@@ -48,6 +48,8 @@ public class EndpointTests : IAsyncLifetime
         _registry = Substitute.For<ProviderRegistry>(NullLogger<ProviderRegistry>.Instance);
         _registry.AccountIds.Returns(["acc-1"]);
         _broadcaster = new WebSocketBroadcaster(NullLogger<WebSocketBroadcaster>.Instance);
+        _emailRepo.GetAccountCountsAsync(Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<string, (int Unread, int Flagged)>());
     }
 
     public async Task InitializeAsync()

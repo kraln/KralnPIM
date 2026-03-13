@@ -28,17 +28,24 @@ internal static class MailEndpoints
             return Results.Ok(headers);
         });
 
-        group.MapGet("/accounts", (
+        group.MapGet("/accounts", async (
             PimConfig config,
-            AccountStatusTracker tracker) =>
+            IEmailRepository repo,
+            AccountStatusTracker tracker,
+            CancellationToken ct) =>
         {
-            var accounts = config.Accounts.Select(a => new AccountOverview(
-                a.Id,
-                a.DisplayName,
-                a.Type.ToString(),
-                tracker.IsOnline(a.Id),
-                0, 0,
-                a.Color)).ToList();
+            var counts = await repo.GetAccountCountsAsync(ct);
+            var accounts = config.Accounts.Select(a =>
+            {
+                var (unread, flagged) = counts.GetValueOrDefault(a.Id);
+                return new AccountOverview(
+                    a.Id,
+                    a.DisplayName,
+                    a.Type.ToString(),
+                    tracker.IsOnline(a.Id),
+                    unread, flagged,
+                    a.Color);
+            }).ToList();
             return Results.Ok(accounts);
         });
 

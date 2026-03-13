@@ -192,6 +192,30 @@ public sealed class SqliteEmailRepository : IEmailRepository
         return results;
     }
 
+    public async Task<Dictionary<string, (int Unread, int Flagged)>> GetAccountCountsAsync(CancellationToken ct = default)
+    {
+        using var conn = _factory.CreateConnection();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            SELECT account_id,
+                   SUM(CASE WHEN is_read = 0 THEN 1 ELSE 0 END) AS unread,
+                   SUM(CASE WHEN is_flagged = 1 THEN 1 ELSE 0 END) AS flagged
+            FROM email_headers
+            GROUP BY account_id
+            """;
+
+        var results = new Dictionary<string, (int Unread, int Flagged)>();
+        using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            var accountId = reader.GetString(0);
+            var unread = reader.GetInt32(1);
+            var flagged = reader.GetInt32(2);
+            results[accountId] = (unread, flagged);
+        }
+        return results;
+    }
+
     private static EmailHeader ReadHeader(SqliteDataReader reader)
     {
         return new EmailHeader(
