@@ -177,6 +177,28 @@ public class EndpointTests : IAsyncLifetime
         Assert.Contains("Test Account", json);
     }
 
+    [Fact]
+    public async Task GetAccounts_ReturnsUnreadAndFlaggedCounts()
+    {
+        _statusTracker.MarkOnline("acc-1");
+        _emailRepo.GetAccountCountsAsync(Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<string, (int Unread, int Flagged)>
+            {
+                ["acc-1"] = (5, 3)
+            });
+
+        var response = await _client.GetAsync("/api/mail/accounts");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var json = await response.Content.ReadAsStringAsync();
+        var accounts = JsonSerializer.Deserialize<List<AccountOverview>>(json,
+            new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+        Assert.NotNull(accounts);
+        var acc = Assert.Single(accounts);
+        Assert.Equal(5, acc.UnreadCount);
+        Assert.Equal(3, acc.FlaggedCount);
+    }
+
     // --- Calendar ---
 
     [Fact]

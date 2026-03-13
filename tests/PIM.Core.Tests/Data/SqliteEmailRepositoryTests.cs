@@ -238,6 +238,47 @@ public class SqliteEmailRepositoryTests : IDisposable
     }
 
     [Fact]
+    public async Task GetAccountCounts_EmptyDatabase_ReturnsEmptyDictionary()
+    {
+        var counts = await _repo.GetAccountCountsAsync();
+        Assert.Empty(counts);
+    }
+
+    [Fact]
+    public async Task GetAccountCounts_SingleAccount_CountsCorrectly()
+    {
+        await _repo.UpsertHeadersAsync([
+            MakeHeader("msg-1", accountId: "acc-1", isRead: false, isFlagged: false),
+            MakeHeader("msg-2", accountId: "acc-1", isRead: false, isFlagged: true),
+            MakeHeader("msg-3", accountId: "acc-1", isRead: true, isFlagged: true),
+            MakeHeader("msg-4", accountId: "acc-1", isRead: true, isFlagged: false),
+        ]);
+
+        var counts = await _repo.GetAccountCountsAsync();
+        Assert.Single(counts);
+        Assert.Equal(2, counts["acc-1"].Unread);
+        Assert.Equal(2, counts["acc-1"].Flagged);
+    }
+
+    [Fact]
+    public async Task GetAccountCounts_MultipleAccounts_GroupsCorrectly()
+    {
+        await _repo.UpsertHeadersAsync([
+            MakeHeader("msg-1", accountId: "acc-1", isRead: false, isFlagged: false),
+            MakeHeader("msg-2", accountId: "acc-1", isRead: false, isFlagged: true),
+            MakeHeader("msg-3", accountId: "acc-2", isRead: true, isFlagged: false),
+            MakeHeader("msg-4", accountId: "acc-2", isRead: false, isFlagged: true),
+        ]);
+
+        var counts = await _repo.GetAccountCountsAsync();
+        Assert.Equal(2, counts.Count);
+        Assert.Equal(2, counts["acc-1"].Unread);
+        Assert.Equal(1, counts["acc-1"].Flagged);
+        Assert.Equal(1, counts["acc-2"].Unread);
+        Assert.Equal(1, counts["acc-2"].Flagged);
+    }
+
+    [Fact]
     public async Task JsonFields_Attachments_RoundTrip()
     {
         var attachments = new List<AttachmentInfo>
