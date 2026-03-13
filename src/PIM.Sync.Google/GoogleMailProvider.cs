@@ -35,6 +35,7 @@ public sealed class GoogleMailProvider : IMailProvider
         _syncStateRepo = syncStateRepo;
         _rateLimiter = rateLimiter;
         _logger = logger;
+        EnsureCodePages();
     }
 
     public async Task AuthenticateAsync(CancellationToken ct)
@@ -300,7 +301,7 @@ public sealed class GoogleMailProvider : IMailProvider
         return new SyncResult<EmailHeader>(upserted, deletedIds, newHistoryId);
     }
 
-    private string ExtractPlainText(MessagePart? payload)
+    internal string ExtractPlainText(MessagePart? payload)
     {
         if (payload is null) return "";
 
@@ -334,7 +335,7 @@ public sealed class GoogleMailProvider : IMailProvider
     /// the MIME content-transfer-encoding. If the part uses quoted-printable, we must
     /// decode that ourselves after the base64url decode.
     /// </summary>
-    private static string DecodePartBody(MessagePart part)
+    internal static string DecodePartBody(MessagePart part)
     {
         // Gmail API base64url-decodes AND content-transfer-decodes (QP/base64)
         // for us — Body.Data is always the raw decoded bytes in the part's charset.
@@ -354,7 +355,14 @@ public sealed class GoogleMailProvider : IMailProvider
         return encoding.GetString(raw);
     }
 
-    private static string GetCharset(MessagePart part)
+    /// <summary>
+    /// Registers CodePagesEncodingProvider so charsets like Windows-1252, ISO-8859-1 etc.
+    /// are available. Safe to call multiple times (idempotent).
+    /// </summary>
+    internal static void EnsureCodePages() =>
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+
+    internal static string GetCharset(MessagePart part)
     {
         var ct = part.Headers?.FirstOrDefault(
             h => string.Equals(h.Name, "Content-Type", StringComparison.OrdinalIgnoreCase))?.Value;
@@ -394,7 +402,7 @@ public sealed class GoogleMailProvider : IMailProvider
         return null;
     }
 
-    private static byte[] DecodeBase64UrlBytes(string data) =>
+    internal static byte[] DecodeBase64UrlBytes(string data) =>
         Convert.FromBase64String(data.Replace('-', '+').Replace('_', '/'));
 
     private static string DecodeBase64Url(string data) =>

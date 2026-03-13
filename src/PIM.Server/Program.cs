@@ -83,17 +83,35 @@ app.Use(async (context, next) =>
     await next();
 });
 
-// 7. Global error handler
-app.UseExceptionHandler(exApp =>
+// 7. Global error handler (inline — UseExceptionHandler needs Diagnostics.Abstractions which is
+//    missing in .NET 10 preview builds)
+app.Use(async (context, next) =>
 {
-    exApp.Run(async context =>
+    try
     {
-        context.Response.StatusCode = 500;
-        context.Response.ContentType = "application/json";
-        await context.Response.WriteAsJsonAsync(
-            new ErrorResponse("An unexpected error occurred."),
-            ServerJsonContext.Default.ErrorResponse);
-    });
+        await next();
+    }
+    catch (OperationCanceledException)
+    {
+        // Client disconnected — don't log noise
+        if (!context.Response.HasStarted)
+            context.Response.StatusCode = 499; // nginx-style "client closed request"
+    }
+    catch (Exception ex)
+    {
+        var log = context.RequestServices.GetRequiredService<ILoggerFactory>()
+            .CreateLogger("PIM.Server");
+        log.LogError(ex, "Unhandled exception on {Method} {Path}", context.Request.Method, context.Request.Path);
+
+        if (!context.Response.HasStarted)
+        {
+            context.Response.StatusCode = 500;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsJsonAsync(
+                new ErrorResponse("An unexpected error occurred."),
+                ServerJsonContext.Default.ErrorResponse);
+        }
+    }
 });
 
 // 8. Map API endpoints

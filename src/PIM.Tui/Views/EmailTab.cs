@@ -17,6 +17,7 @@ internal sealed class EmailTab : View
 
     private readonly FrameView _inboxFrame;
     private readonly FrameView _readerFrame;
+    private readonly AccountListView _accountList;
     private readonly EmailListView _emailList;
     private readonly TextField _searchField;
     private readonly View _readerContent;
@@ -27,7 +28,9 @@ internal sealed class EmailTab : View
     private readonly TextView _readerBody;
     private readonly ListView _attachmentList;
 
+    private List<EmailHeader> _allEmails = [];
     private List<EmailHeader> _emails = [];
+    private List<AccountOverview> _accounts = [];
     private EmailHeader? _selectedEmail;
     private MailDetail? _currentDetail;
     private ComposeView? _composeView;
@@ -54,9 +57,18 @@ internal sealed class EmailTab : View
             Height = Dim.Fill()
         };
 
-        _emailList = new EmailListView(app)
+        _accountList = new AccountListView(app)
         {
             X = 0, Y = 0,
+            Width = Dim.Fill(),
+            Height = 1
+        };
+        _accountList.FilterChanged += ApplyAccountFilter;
+        _app.RegisterQuitKey(_accountList);
+
+        _emailList = new EmailListView(app)
+        {
+            X = 0, Y = Pos.Bottom(_accountList),
             Width = Dim.Fill(),
             Height = Dim.Fill(1)
         };
@@ -85,7 +97,7 @@ internal sealed class EmailTab : View
             e.Handled = true;
         };
 
-        _inboxFrame.Add(_emailList, _searchField);
+        _inboxFrame.Add(_accountList, _emailList, _searchField);
 
         // Right pane: reader
         _readerFrame = new FrameView
@@ -213,7 +225,7 @@ internal sealed class EmailTab : View
                 return;
             }
 
-            if (e == Key.CursorRight && _emailList.HasFocus && _currentDetail is not null)
+            if ((e == Key.CursorRight || e == Key.Tab) && _emailList.HasFocus && _currentDetail is not null)
             {
                 _readerFrame.CanFocus = true;
                 _readerContent.CanFocus = true;
@@ -358,16 +370,27 @@ internal sealed class EmailTab : View
             return;
         }
 
-        var emails = await _app.SafeApiCallAsync(
+        var accountsTask = _app.SafeApiCallAsync(c => _api.GetAccountsAsync(c), ct);
+        var emailsTask = _app.SafeApiCallAsync(
             c => _api.ListMailAsync(isRead: _filterUnread, isFlagged: _filterFlagged,
                 offset: _offset, limit: PageSize, ct: c), ct);
 
-        if (emails is null) return;
+        await Task.WhenAll(accountsTask, emailsTask);
 
-        _emails = emails;
+        var accounts = await accountsTask;
+        var emails = await emailsTask;
+
+        if (accounts is not null)
+            _accounts = accounts.Where(a => a.Type is not "CalDav").ToList();
+        if (emails is not null)
+            _allEmails = emails;
+
         _staleInbox = false;
         _app.App?.Invoke(() =>
         {
+            UpdateAccountList();
+            ApplyAccountFilter();
+
             var filterHints = new List<string>();
             if (_filterUnread == false) filterHints.Add("unread");
             if (_filterFlagged == true) filterHints.Add("flagged");
@@ -375,14 +398,27 @@ internal sealed class EmailTab : View
                 ? $"Inbox ({string.Join(", ", filterHints)})"
                 : "Inbox";
 
-            var selectedIdx = _emailList.SelectedIndex;
-            _emailList.SetEmails(_emails);
-
-            if (selectedIdx >= 0 && selectedIdx < _emails.Count)
-                _emailList.SelectedIndex = selectedIdx;
-
             DeferFocusToInbox();
         });
+    }
+
+    private void UpdateAccountList()
+    {
+        _accountList.SetAccounts(_accounts);
+        _accountList.Height = Math.Max(1, _accounts.Count);
+    }
+
+    private void ApplyAccountFilter()
+    {
+        var disabled = _accountList.DisabledAccountIds;
+        _emails = disabled.Count > 0
+            ? _allEmails.Where(m => !disabled.Contains(m.AccountId)).ToList()
+            : _allEmails;
+
+        var selectedIdx = _emailList.SelectedIndex;
+        _emailList.SetEmails(_emails);
+        if (selectedIdx >= 0 && selectedIdx < _emails.Count)
+            _emailList.SelectedIndex = selectedIdx;
     }
 
     private async Task SelectEmailAsync(EmailHeader header)

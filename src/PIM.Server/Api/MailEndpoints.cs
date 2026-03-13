@@ -71,15 +71,22 @@ internal static class MailEndpoints
                     }
                     catch (Exception ex) when (
                         ex.GetType().Name == "MessageNotFoundException"
-                        || ex is FormatException
-                        || ex is IOException
-                        || ex is InvalidOperationException)
+                        || ex.GetType().Name == "ODataError"
+                        || ex is IOException)
                     {
-                        // Message was moved/deleted on the server since last sync,
-                        // or the stream was truncated (FormatException: End of stream)
+                        // Message was moved/deleted on the server since last sync
                         await repo.DeleteAsync(messageId, ct);
                         return Results.Json(new ErrorResponse("Message no longer exists on server."),
                             ServerJsonContext.Default.ErrorResponse, statusCode: 404);
+                    }
+                    catch (Exception ex) when (
+                        ex is ArgumentException
+                        || ex is FormatException
+                        || ex is InvalidOperationException)
+                    {
+                        // Body decode failure (unsupported charset, truncated stream, etc.)
+                        // — return header without body instead of crashing
+                        body = new EmailBody(messageId, $"(unable to decode message body: {ex.Message})");
                     }
                 }
             }
