@@ -109,6 +109,7 @@ internal sealed class DashboardTab : View
             Height = Dim.Fill()
         };
         _accountList.FilterChanged += ApplyMailFilter;
+        _accountList.ReauthRequested += id => app.TriggerReauth(id);
         _mailFrame.Add(_accountList, _recentMailList);
 
         Add(_agendaFrame, _infoFrame, _tihFrame, _mailFrame);

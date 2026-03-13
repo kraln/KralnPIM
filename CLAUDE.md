@@ -50,7 +50,9 @@ All code must compile with zero errors and zero warnings (except the known IL305
 - Gmail delta sync: `DeltaSyncAsync` catches both 404 (NotFound) and 410 (Gone) from history API — falls back to `FullSyncAsync` with 30-day window. `FullSyncAsync` saves the current history ID from `users.getProfile` (not stale per-message history IDs)
 - Calendar providers skip sync entirely when `_allowedCalendarIds` is null or empty — prevents syncing unwanted calendars (e.g., auto-discovered holiday calendars)
 - All-day events: all three mappers (Google, Graph, CalDAV) store dates with `TimeZoneInfo.Local.GetUtcOffset()` so midnight stays midnight in the local timezone. TUI `TimeGridView` renders all-day events in a dedicated banner row between the forecast header and time slots
-- `GoogleAuthFlow.AuthorizeAsync` takes an `Action<string>? onAuthUrl` callback — callers get the auth URL for explicit browser/clipboard control instead of auto-launch. `TryOpenBrowser` and `TryCopyToClipboard` are `internal static`
+- Agenda/upcoming views: `AgendaListView.BuildRows` clamps event start dates before today to today — multi-day events spanning into today appear under "Today" instead of their original start date. The SQL query `WHERE start_time < @end AND end_time > @start` correctly returns overlapping events
+- `GoogleAuthFlow.AuthorizeAsync` (PIM.Setup) and `GoogleOAuthHelper.AuthorizeAsync` (PIM.Sync.Google) both take `Action<string>? onAuthUrl` callback — callers get the auth URL for explicit browser/clipboard control instead of auto-launch. `TryOpenBrowser` and `TryCopyToClipboard` are `internal static` in PIM.Setup; `TryOpenBrowser` also in `TuiApp`
+- Google OAuth `CreateAuthorizationCodeRequest().Build()` leaves scopes space-separated — must `.Replace(" ", "%20")` before passing URL to browsers/terminals
 - Account wizard type selection: `ListView.Accepting` + `KeyDown` for number keys `1`–`4` advance immediately; `NoTypeAheadMatcher` prevents letter-key consumption
 - `TokenBucketRateLimiter` wraps Google API calls to respect quota limits
 - JSON serialization uses source-generated `PimJsonContext` for AOT compatibility
@@ -58,6 +60,10 @@ All code must compile with zero errors and zero warnings (except the known IL305
 - `ProviderRegistry` builds provider instances per account from config — methods are `virtual` (not sealed) for NSubstitute mocking in tests
 - `SyncScheduler` is a `BackgroundService` with `PeriodicTimer` (5 min default); `AccountSyncWorker` handles per-account sync with 3-retry exponential backoff
 - `AccountStatusTracker` tracks online/offline per account in-memory; REST API returns 503 for writes to offline accounts
+- Google OAuth re-auth flow: `GoogleCredentialManager.OnAuthUrlNeeded` callback gates interactive OAuth — when null (startup/sync), missing tokens throw `ReauthorizationRequiredException` instead of blocking on loopback listener. `POST /api/system/reauth/{accountId}` sets the callback, starts OAuth in background, returns auth URL. TUI opens browser via `xdg-open`. Revoked tokens are deleted from `IAuthRepository` to avoid repeated refresh attempts
+- `ProviderRegistry` tracks `GoogleCredentialManager` instances for re-auth; `StartReauthAsync` uses `TaskCompletionSource` to capture the auth URL from the background OAuth flow
+- TUI loads initial account status via `GET /api/system/status` at startup — without this, `IsAccountOnline()` defaults to `true` and `[RE-AUTH]` tags never appear
+- TUI `AccountListView`: press `R` on a `[RE-AUTH]` account to trigger re-authorization
 - `WebSocketBroadcaster` pushes `mail.sync`, `calendar.sync`, `status.change` events to connected clients
 - Server dual-port routing: middleware checks `context.Connection.LocalPort` to distinguish REST vs WS traffic
 - `PIM.Server.csproj` requires `AllowMissingPrunePackageData` for .NET 10 preview compatibility

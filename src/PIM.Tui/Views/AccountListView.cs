@@ -19,6 +19,7 @@ internal sealed class AccountListView : View
     private int _selectedIndex;
 
     public event Action? FilterChanged;
+    public event Action<string>? ReauthRequested;
 
     public AccountListView(TuiApp app)
     {
@@ -77,6 +78,11 @@ internal sealed class AccountListView : View
             ToggleSelected();
             e.Handled = true;
         }
+        else if (e == Key.R)
+        {
+            TryRequestReauth();
+            e.Handled = true;
+        }
     }
 
     private void HandleMouseEvent(object? sender, Mouse e)
@@ -91,6 +97,14 @@ internal sealed class AccountListView : View
             if (!HasFocus) SetFocus();
             e.Handled = true;
         }
+    }
+
+    private void TryRequestReauth()
+    {
+        if (_selectedIndex < 0 || _selectedIndex >= _accounts.Count) return;
+        var id = _accounts[_selectedIndex].Id;
+        if (_app.GetAccountOfflineReason(id) == "auth_required")
+            ReauthRequested?.Invoke(id);
     }
 
     protected override bool OnDrawingContent(DrawContext? context)

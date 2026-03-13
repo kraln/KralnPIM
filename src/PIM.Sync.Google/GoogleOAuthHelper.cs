@@ -27,7 +27,8 @@ public static class GoogleOAuthHelper
         string accountId,
         IAuthRepository authRepo,
         ILogger logger,
-        CancellationToken ct)
+        CancellationToken ct,
+        Action<string>? onAuthUrl = null)
     {
         var flow = new GoogleAuthorizationCodeFlow(new GoogleAuthorizationCodeFlow.Initializer
         {
@@ -52,7 +53,11 @@ public static class GoogleOAuthHelper
         var redirectUri = $"http://127.0.0.1:{port}/";
 
         var authUri = flow.CreateAuthorizationCodeRequest(redirectUri).Build();
-        logger.LogInformation("Open this URL in your browser to authorize:\n{AuthUrl}", authUri);
+        // Google's library leaves scopes space-separated in the query string;
+        // replace literal spaces with %20 so the URL works in browsers/terminals.
+        var authUrl = authUri.ToString().Replace(" ", "%20");
+        logger.LogInformation("Open this URL in your browser to authorize:\n{AuthUrl}", authUrl);
+        onAuthUrl?.Invoke(authUrl);
 
         var code = await ListenForAuthCodeAsync(redirectUri, ct);
 

@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
 using PIM.Core.Models;
 using PIM.Tui.Client;
 using PIM.Tui.Models;
@@ -154,6 +156,7 @@ internal sealed class TuiApp : Window
             });
             _ = _dashboardTab.LoadAsync(CancellationToken.None);
             _ = LoadAccountColorsAsync();
+            _ = LoadInitialStatusAsync();
         };
     }
 
@@ -179,6 +182,20 @@ internal sealed class TuiApp : Window
         if (accounts is null) return;
         foreach (var a in accounts)
             _accountColors[a.Id] = a.Color;
+    }
+
+    private async Task LoadInitialStatusAsync()
+    {
+        var status = await SafeApiCallAsync(c => _api.GetStatusAsync(c));
+        if (status is null) return;
+        App?.Invoke(() =>
+        {
+            foreach (var a in status.Accounts)
+            {
+                _accountStatus[a.AccountId] = a.Online;
+                _accountOfflineReasons[a.AccountId] = a.OfflineReason;
+            }
+        });
     }
 
     internal string? GetAccountColor(string accountId) =>
@@ -304,6 +321,45 @@ internal sealed class TuiApp : Window
         {
             App?.Invoke(() => ShowError(ex.Message));
         }
+    }
+
+    internal void TriggerReauth(string accountId)
+    {
+        ShowStatus($"Requesting re-authorization for '{accountId}'...");
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var result = await _api.RequestReauthAsync(accountId);
+                if (result?.AuthUrl is { } url)
+                {
+                    TryOpenBrowser(url);
+                    App?.Invoke(() => ShowStatus($"Browser opened for re-auth. Complete authorization in browser."));
+                }
+                else
+                {
+                    App?.Invoke(() => ShowStatus(result?.Message ?? "Re-auth not available for this account."));
+                }
+            }
+            catch (Exception ex)
+            {
+                App?.Invoke(() => ShowError($"Re-auth failed: {ex.Message}"));
+            }
+        });
+    }
+
+    private static void TryOpenBrowser(string url)
+    {
+        try
+        {
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                Process.Start(new ProcessStartInfo(url.Replace("&", "^&")) { UseShellExecute = true });
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+                Process.Start("xdg-open", url);
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+                Process.Start("open", url);
+        }
+        catch { /* best-effort */ }
     }
 
     private void ShowHelp()

@@ -227,7 +227,9 @@ internal sealed class AgendaListView : View
 
         foreach (var e in events)
         {
-            var eventDate = e.Start.ToLocalTime().Date;
+            // Clamp past start dates to today so multi-day events show under "Today"
+            var rawDate = e.Start.ToLocalTime().Date;
+            var eventDate = rawDate < today ? today : rawDate;
             if (currentDate != eventDate)
             {
                 if (rows.Count > 0) rows.Add(new AgendaRow(AgendaRowKind.Blank, null, "", null));

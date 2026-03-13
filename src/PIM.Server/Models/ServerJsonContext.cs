@@ -21,6 +21,7 @@ namespace PIM.Server.Models;
 [JsonSerializable(typeof(MailSyncEvent))]
 [JsonSerializable(typeof(CalendarSyncEvent))]
 [JsonSerializable(typeof(StatusChangeEvent))]
+[JsonSerializable(typeof(ReauthResponse))]
 [JsonSerializable(typeof(SearchResult))]
 [JsonSerializable(typeof(SearchScope))]
 public partial class ServerJsonContext : JsonSerializerContext

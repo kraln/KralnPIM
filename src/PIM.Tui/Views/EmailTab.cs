@@ -64,6 +64,7 @@ internal sealed class EmailTab : View
             Height = 1
         };
         _accountList.FilterChanged += ApplyAccountFilter;
+        _accountList.ReauthRequested += id => _app.TriggerReauth(id);
         _app.RegisterQuitKey(_accountList);
 
         _emailList = new EmailListView(app)

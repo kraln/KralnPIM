@@ -27,3 +27,5 @@ public sealed record AccountStatusInfo(
     bool Online,
     string? OfflineReason,
     DateTimeOffset? LastSync);
+
+public sealed record ReauthResponse(string? AuthUrl, string Message);

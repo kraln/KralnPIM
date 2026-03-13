@@ -18,6 +18,11 @@ public sealed class GoogleCredentialManager
     private readonly ILogger _logger;
     private UserCredential? _credential;
 
+    /// <summary>
+    /// Callback invoked when interactive OAuth is needed, providing the auth URL.
+    /// </summary>
+    public Action<string>? OnAuthUrlNeeded { get; set; }
+
     public GoogleCredentialManager(
         string accountId,
         string clientId,
@@ -92,8 +97,9 @@ public sealed class GoogleCredentialManager
                 }
                 catch (TokenResponseException ex) when (IsTokenRevoked(ex))
                 {
-                    _logger.LogWarning("Stored token revoked for {AccountId}, clearing credential", _accountId);
+                    _logger.LogWarning("Stored token revoked for {AccountId}, clearing credential and stored token", _accountId);
                     _credential = null;
+                    await _authRepo.DeleteOAuthTokenAsync(_accountId, ct);
                     throw new ReauthorizationRequiredException(_accountId, ex);
                 }
             }
@@ -101,9 +107,15 @@ public sealed class GoogleCredentialManager
             return _credential;
         }
 
-        // No stored token — run interactive OAuth flow
+        // No stored token — need interactive OAuth flow
+        if (OnAuthUrlNeeded is null)
+        {
+            // Not in interactive re-auth context — cannot proceed without user interaction
+            throw new ReauthorizationRequiredException(_accountId);
+        }
+
         _credential = await GoogleOAuthHelper.AuthorizeAsync(
-            _clientId, _clientSecret, _accountId, _authRepo, _logger, ct);
+            _clientId, _clientSecret, _accountId, _authRepo, _logger, ct, OnAuthUrlNeeded);
 
         return _credential;
     }

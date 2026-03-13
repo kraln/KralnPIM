@@ -14,6 +14,7 @@ public class ProviderRegistry
 {
     private readonly Dictionary<string, IMailProvider> _mailProviders = new();
     private readonly Dictionary<string, List<ICalendarProvider>> _calendarProviders = new();
+    private readonly Dictionary<string, GoogleCredentialManager> _googleCredManagers = new();
     private readonly ILogger<ProviderRegistry> _logger;
 
     public ProviderRegistry(ILogger<ProviderRegistry> logger)
@@ -102,6 +103,67 @@ public class ProviderRegistry
         }
     }
 
+    /// <summary>
+    /// Starts interactive re-authentication for an account.
+    /// Returns the auth URL the user must visit, or null if the account type doesn't need interactive auth.
+    /// The returned Task completes when the OAuth callback is received.
+    /// </summary>
+    public async Task<string?> StartReauthAsync(
+        string accountId,
+        AccountStatusTracker statusTracker,
+        WebSocket.WebSocketBroadcaster broadcaster,
+        CancellationToken ct)
+    {
+        if (_googleCredManagers.TryGetValue(accountId, out var credMgr))
+        {
+            var urlTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+            credMgr.OnAuthUrlNeeded = url => urlTcs.TrySetResult(url);
+
+            // Start the auth flow in a background task
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var mailProvider = GetMailProvider(accountId);
+                    if (mailProvider is not null)
+                        await mailProvider.AuthenticateAsync(ct);
+
+                    foreach (var calProvider in GetCalendarProviders(accountId))
+                        await calProvider.AuthenticateAsync(ct);
+
+                    statusTracker.MarkOnline(accountId);
+                    await broadcaster.BroadcastAsync(
+                        new WebSocket.StatusChangeEvent(accountId, true), ct);
+                    _logger.LogInformation("Re-authentication succeeded for {AccountId}", accountId);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    _logger.LogWarning(ex, "Re-authentication failed for {AccountId}", accountId);
+                    urlTcs.TrySetException(ex);
+                }
+                finally
+                {
+                    credMgr.OnAuthUrlNeeded = null;
+                }
+            }, ct);
+
+            // Wait for the auth URL to be produced (or failure)
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(TimeSpan.FromSeconds(15));
+            try
+            {
+                return await urlTcs.Task.WaitAsync(cts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                return null;
+            }
+        }
+
+        // O365/Graph: device code flow — could be extended similarly
+        return null;
+    }
+
     private async Task BuildProvidersForAccountAsync(
         AccountConfig account,
         IAuthRepository authRepo,
@@ -138,6 +200,7 @@ public class ProviderRegistry
         var credMgr = new GoogleCredentialManager(
             account.Id, clientId, clientSecret,
             authRepo, loggerFactory.CreateLogger<GoogleCredentialManager>());
+        _googleCredManagers[account.Id] = credMgr;
 
         var rateLimiter = new TokenBucketRateLimiter(250, 250);
         var allowedCalendarIds = account.Calendars?.Select(c => c.Id).ToHashSet();

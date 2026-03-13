@@ -146,6 +146,14 @@ public sealed class PimApiClient : IDisposable
     public async Task<SystemStatus?> GetStatusAsync(CancellationToken ct = default) =>
         await GetAsync<SystemStatus>("/api/system/status", ct);
 
+    public async Task<ReauthResponse?> RequestReauthAsync(string accountId, CancellationToken ct = default)
+    {
+        using var response = await _http.PostAsync(
+            $"/api/system/reauth/{Uri.EscapeDataString(accountId)}", null, ct);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<ReauthResponse>(_jsonOptions, ct);
+    }
+
     internal async Task<HttpResponseMessage> PostAsJsonRawAsync<T>(string url, T body, CancellationToken ct = default) =>
         await _http.PostAsJsonAsync(url, body, _jsonOptions, ct);
 

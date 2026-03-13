@@ -28,4 +28,6 @@ public sealed record AccountStatusInfo(
     string? OfflineReason,
     DateTimeOffset? LastSync);
 
+public sealed record ReauthResponse(string? AuthUrl, string Message);
+
 public sealed record AttachmentDownloadResult(string FilePath);

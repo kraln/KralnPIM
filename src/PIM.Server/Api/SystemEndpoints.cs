@@ -4,6 +4,7 @@ using PIM.Core.Providers;
 using PIM.Server.Models;
 using PIM.Server.Registration;
 using PIM.Server.Services;
+using PIM.Server.WebSocket;
 
 namespace PIM.Server.Api;
 
@@ -71,6 +72,28 @@ internal static class SystemEndpoints
             }).ToList();
 
             return Results.Ok(new SystemStatus(accounts));
+        });
+
+        group.MapPost("/reauth/{accountId}", async (
+            string accountId,
+            ProviderRegistry registry,
+            AccountStatusTracker tracker,
+            WebSocketBroadcaster broadcaster,
+            CancellationToken ct) =>
+        {
+            if (tracker.IsOnline(accountId))
+                return Results.Ok(new ReauthResponse(null, "Account is already online."));
+
+            if (tracker.GetOfflineReason(accountId) != Services.OfflineReason.AuthRequired)
+                return Results.Json(new ErrorResponse("Account is offline but does not require re-authorization."),
+                    ServerJsonContext.Default.ErrorResponse, statusCode: 400);
+
+            var authUrl = await registry.StartReauthAsync(accountId, tracker, broadcaster, ct);
+            if (authUrl is null)
+                return Results.Json(new ErrorResponse("Re-authorization not supported for this account type."),
+                    ServerJsonContext.Default.ErrorResponse, statusCode: 400);
+
+            return Results.Ok(new ReauthResponse(authUrl, "Open this URL in your browser to re-authorize."));
         });
     }
 }

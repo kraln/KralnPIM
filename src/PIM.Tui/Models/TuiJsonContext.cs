@@ -15,6 +15,7 @@ namespace PIM.Tui.Models;
 [JsonSerializable(typeof(SystemStatus))]
 [JsonSerializable(typeof(AccountStatusInfo))]
 [JsonSerializable(typeof(List<AccountStatusInfo>))]
+[JsonSerializable(typeof(ReauthResponse))]
 [JsonSerializable(typeof(AttachmentDownloadResult))]
 [JsonSerializable(typeof(WsEventEnvelope))]
 [JsonSerializable(typeof(MailSyncEvent))]
