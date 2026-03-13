@@ -21,22 +21,28 @@ public class SqliteCalendarRepositoryTests : IDisposable
         string accountId = "acc-1",
         DateTimeOffset? start = null,
         DateTimeOffset? end = null,
-        string summary = "Test Event")
+        string summary = "Test Event",
+        string calendarId = "cal-1",
+        string? description = "A test event",
+        string? location = "Room A",
+        List<string>? invitees = null,
+        string? recurrenceRule = null,
+        EventStatus status = EventStatus.Confirmed)
     {
         var s = start ?? new DateTimeOffset(2025, 1, 6, 9, 0, 0, TimeSpan.Zero);
         return new CalendarEvent(
             EventId: eventId,
             AccountId: accountId,
-            CalendarId: "cal-1",
+            CalendarId: calendarId,
             Summary: summary,
-            Description: "A test event",
+            Description: description,
             Start: s,
             End: end ?? s.AddHours(1),
             IsAllDay: false,
-            Location: "Room A",
-            Invitees: ["alice@example.com"],
-            RecurrenceRule: null,
-            Status: EventStatus.Confirmed
+            Location: location,
+            Invitees: invitees ?? ["alice@example.com"],
+            RecurrenceRule: recurrenceRule,
+            Status: status
         );
     }
 
@@ -133,6 +139,87 @@ public class SqliteCalendarRepositoryTests : IDisposable
     {
         await _repo.DeleteEventAsync("nonexistent");
         // Should not throw
+    }
+
+    [Fact]
+    public async Task UpsertAndRetrieve_NullDescriptionLocationRecurrence_RoundTrips()
+    {
+        var evt = MakeEvent(description: null, location: null, recurrenceRule: null);
+        await _repo.UpsertEventsAsync([evt]);
+
+        var results = await _repo.GetEventsInRangeAsync(
+            evt.Start.AddHours(-1), evt.End.AddHours(1));
+        Assert.Single(results);
+        Assert.Null(results[0].Description);
+        Assert.Null(results[0].Location);
+        Assert.Null(results[0].RecurrenceRule);
+    }
+
+    [Fact]
+    public async Task UpsertAndRetrieve_InviteesJsonArray_RoundTrips()
+    {
+        var invitees = new List<string> { "a@b.com", "c@d.com", "e@f.com" };
+        var evt = MakeEvent(invitees: invitees);
+        await _repo.UpsertEventsAsync([evt]);
+
+        var results = await _repo.GetEventsInRangeAsync(
+            evt.Start.AddHours(-1), evt.End.AddHours(1));
+        Assert.Single(results);
+        Assert.Equal(3, results[0].Invitees.Count);
+        Assert.Equal(invitees, results[0].Invitees);
+    }
+
+    [Fact]
+    public async Task UpsertAndRetrieve_EmptyInvitees_RoundTrips()
+    {
+        var evt = MakeEvent(invitees: []);
+        await _repo.UpsertEventsAsync([evt]);
+
+        var results = await _repo.GetEventsInRangeAsync(
+            evt.Start.AddHours(-1), evt.End.AddHours(1));
+        Assert.Single(results);
+        Assert.Empty(results[0].Invitees);
+    }
+
+    [Fact]
+    public async Task DeleteEventsNotInCalendars_EmptyKeepSet_DeletesAllForAccount()
+    {
+        await _repo.UpsertEventsAsync([
+            MakeEvent("evt-1", accountId: "acc-1", calendarId: "cal-1"),
+            MakeEvent("evt-2", accountId: "acc-1", calendarId: "cal-2"),
+            MakeEvent("evt-3", accountId: "acc-2", calendarId: "cal-1"),
+        ]);
+
+        var deleted = await _repo.DeleteEventsNotInCalendarsAsync("acc-1", new HashSet<string>());
+
+        Assert.Equal(2, deleted);
+
+        var all = await _repo.GetEventsInRangeAsync(
+            new DateTimeOffset(2025, 1, 5, 0, 0, 0, TimeSpan.Zero),
+            new DateTimeOffset(2025, 1, 7, 0, 0, 0, TimeSpan.Zero));
+        Assert.Single(all);
+        Assert.Equal("acc-2", all[0].AccountId);
+    }
+
+    [Fact]
+    public async Task DeleteEventsNotInCalendars_SpecificCalendarIds_KeepsOnlyMatching()
+    {
+        await _repo.UpsertEventsAsync([
+            MakeEvent("evt-1", accountId: "acc-1", calendarId: "cal-1"),
+            MakeEvent("evt-2", accountId: "acc-1", calendarId: "cal-2"),
+            MakeEvent("evt-3", accountId: "acc-1", calendarId: "cal-3"),
+        ]);
+
+        var deleted = await _repo.DeleteEventsNotInCalendarsAsync("acc-1",
+            new HashSet<string> { "cal-1", "cal-3" });
+
+        Assert.Equal(1, deleted);
+
+        var all = await _repo.GetEventsInRangeAsync(
+            new DateTimeOffset(2025, 1, 5, 0, 0, 0, TimeSpan.Zero),
+            new DateTimeOffset(2025, 1, 7, 0, 0, 0, TimeSpan.Zero));
+        Assert.Equal(2, all.Count);
+        Assert.DoesNotContain(all, e => e.CalendarId == "cal-2");
     }
 
     [Fact]

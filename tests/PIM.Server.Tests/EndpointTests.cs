@@ -199,6 +199,46 @@ public class EndpointTests : IAsyncLifetime
         Assert.Equal(3, acc.FlaggedCount);
     }
 
+    [Fact]
+    public async Task PatchMail_SetIsRead_CallsRepoAndProvider()
+    {
+        _statusTracker.MarkOnline("acc-1");
+        var header = new EmailHeader("msg-1", "acc-1", "INBOX", "Test", "a@b.com", "Alice",
+            ["b@c.com"], [], DateTimeOffset.UtcNow, false, false, null, []);
+        _emailRepo.GetHeaderAsync("msg-1", Arg.Any<CancellationToken>()).Returns(header);
+
+        var mailProvider = Substitute.For<IMailProvider>();
+        _registry.GetMailProvider("acc-1").Returns(mailProvider);
+
+        var patch = new MailFlagPatch(IsRead: true, IsFlagged: null);
+        var response = await _client.SendAsync(new HttpRequestMessage(HttpMethod.Patch, "/api/mail/msg-1")
+        {
+            Content = JsonContent.Create(patch)
+        });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        await _emailRepo.Received(1).SetReadAsync("msg-1", true, Arg.Any<CancellationToken>());
+        await mailProvider.Received(1).SetFlagsAsync("msg-1", true, null, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task PostJunk_Success_MovesAndDeletes()
+    {
+        _statusTracker.MarkOnline("acc-1");
+        var header = new EmailHeader("msg-1", "acc-1", "INBOX", "Spam", "x@y.com", "Spammer",
+            ["b@c.com"], [], DateTimeOffset.UtcNow, false, false, null, []);
+        _emailRepo.GetHeaderAsync("msg-1", Arg.Any<CancellationToken>()).Returns(header);
+
+        var mailProvider = Substitute.For<IMailProvider>();
+        _registry.GetMailProvider("acc-1").Returns(mailProvider);
+
+        var response = await _client.PostAsync("/api/mail/msg-1/junk", null);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        await mailProvider.Received(1).MoveToJunkAsync("msg-1", Arg.Any<CancellationToken>());
+        await _emailRepo.Received(1).DeleteAsync("msg-1", Arg.Any<CancellationToken>());
+    }
+
     // --- Calendar ---
 
     [Fact]
@@ -233,6 +273,55 @@ public class EndpointTests : IAsyncLifetime
 
         var response = await _client.PostAsJsonAsync("/api/calendar/events", evt);
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task UpdateEvent_Online_CallsProviderAndReturnsOk()
+    {
+        _statusTracker.MarkOnline("acc-1");
+
+        var calProvider = Substitute.For<ICalendarProvider>();
+        _registry.GetCalendarProviders("acc-1").Returns([calProvider]);
+
+        var evt = new CalendarEvent("evt-1", "acc-1", "cal-1", "Updated Meeting", null,
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(2),
+            false, "Room B", [], null, EventStatus.Confirmed);
+
+        var response = await _client.PutAsJsonAsync("/api/calendar/events/evt-1", evt);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var json = await response.Content.ReadAsStringAsync();
+        Assert.Contains("Updated Meeting", json);
+        await calProvider.Received(1).UpdateEventAsync(
+            Arg.Is<CalendarEvent>(e => e.Summary == "Updated Meeting"),
+            Arg.Any<CancellationToken>());
+        await _calendarRepo.Received(1).UpsertEventsAsync(
+            Arg.Any<IEnumerable<CalendarEvent>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task UpdateEvent_Offline_Returns503()
+    {
+        _statusTracker.MarkOffline("acc-1");
+
+        var evt = new CalendarEvent("evt-1", "acc-1", "cal-1", "Updated", null,
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(2),
+            false, null, [], null, EventStatus.Confirmed);
+
+        var response = await _client.PutAsJsonAsync("/api/calendar/events/evt-1", evt);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task DeleteEvent_NotFound_Returns404()
+    {
+        _calendarRepo.GetEventsInRangeAsync(
+            Arg.Any<DateTimeOffset>(), Arg.Any<DateTimeOffset>(),
+            Arg.Any<string?>(), Arg.Any<CancellationToken>())
+            .Returns(new List<CalendarEvent>());
+
+        var response = await _client.DeleteAsync("/api/calendar/events/nonexistent");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     // --- Search ---
