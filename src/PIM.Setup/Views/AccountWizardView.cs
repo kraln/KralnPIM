@@ -350,8 +350,10 @@ internal sealed partial class AccountWizardView : View
 
         var statusLabel = new Label { X = 2, Y = 2, Text = "Discovering calendars..." };
 
-        // Discovered calendars: (Id, Name, Url?, selected)
-        var discovered = new List<(string Id, string Name, string? Url, bool Selected)>();
+        // Discovered calendars: (Id, Name, Url?, selected, isSink)
+        // A sink calendar receives anonymized busy blocks coalesced from every
+        // other calendar in the system; it is push-only and never pulled.
+        var discovered = new List<(string Id, string Name, string? Url, bool Selected, bool IsSink)>();
         var listItems = new ObservableCollection<string>();
         var listView = new ListView
         {
@@ -373,6 +375,11 @@ internal sealed partial class AccountWizardView : View
             if (e == Key.Space)
             {
                 ToggleCalendarSelection(discovered, listItems, listView);
+                e.Handled = true;
+            }
+            else if (e == new Key('f') || e == new Key('F'))
+            {
+                ToggleSinkStatus(discovered, listItems, listView);
                 e.Handled = true;
             }
         };
@@ -398,7 +405,8 @@ internal sealed partial class AccountWizardView : View
             e.Handled = true;
             for (var i = 0; i < discovered.Count; i++)
             {
-                discovered[i] = discovered[i] with { Selected = false };
+                // Deselecting a sink also clears the sink flag — a sink that isn't selected has no purpose.
+                discovered[i] = discovered[i] with { Selected = false, IsSink = false };
                 listItems[i] = FormatCalendarLine(discovered[i]);
             }
             listView.Source = new ListWrapper<string>(listItems);
@@ -434,7 +442,7 @@ internal sealed partial class AccountWizardView : View
                 _app.ShowError($"Calendar '{manualIdField.Text}' already in the list.");
                 return;
             }
-            var entry = (manualIdField.Text, manualIdField.Text, (string?)manualUrlField.Text, true);
+            var entry = (manualIdField.Text, manualIdField.Text, (string?)manualUrlField.Text, true, false);
             discovered.Add(entry);
             listItems.Add(FormatCalendarLine(entry));
             listView.Source = new ListWrapper<string>(listItems);
@@ -470,7 +478,10 @@ internal sealed partial class AccountWizardView : View
                 _ => CalendarType.CalDav,
             };
             foreach (var cal in selected)
-                _calendars.Add(new CalendarSourceConfig(cal.Id, calType, cal.Url));
+                _calendars.Add(new CalendarSourceConfig(
+                    cal.Id, calType, cal.Url,
+                    Color: null,
+                    FreebusySink: cal.IsSink ? true : null));
 
             SaveAccount();
             SavePasswordToDb();
@@ -491,14 +502,15 @@ internal sealed partial class AccountWizardView : View
                 _app.InitializeDb();
                 var results = await DiscoverCalendarsForAccountAsync();
 
-                var existingIds = new HashSet<string>(_calendars.Select(c => c.Id));
+                var existingById = _calendars.ToDictionary(c => c.Id);
 
                 App?.Invoke(() =>
                 {
                     foreach (var (id, name, url) in results)
                     {
-                        var selected = existingIds.Count == 0 || existingIds.Contains(id);
-                        var entry = (id, name, url, selected);
+                        var selected = existingById.Count == 0 || existingById.ContainsKey(id);
+                        var isSink = existingById.TryGetValue(id, out var existing) && existing.FreebusySink == true;
+                        var entry = (id, name, url, selected, isSink);
                         discovered.Add(entry);
                         listItems.Add(FormatCalendarLine(entry));
                     }
@@ -506,14 +518,14 @@ internal sealed partial class AccountWizardView : View
                     // Also add any existing calendars not found by discovery (e.g. manually added)
                     foreach (var existing in _calendars.Where(c => !results.Any(r => r.Id == c.Id)))
                     {
-                        var entry = (existing.Id, existing.Id, existing.Url, true);
+                        var entry = (existing.Id, existing.Id, existing.Url, true, existing.FreebusySink == true);
                         discovered.Add(entry);
                         listItems.Add(FormatCalendarLine(entry));
                     }
 
                     listView.Source = new ListWrapper<string>(listItems);
                     statusLabel.Text = results.Count > 0
-                        ? $"Found {results.Count} calendars. Space/Enter to toggle, then Done."
+                        ? $"Found {results.Count} calendars. Space=toggle, F=mark as free/busy sink, Done to save."
                         : "No calendars discovered. Add manually or check auth.";
                 });
             }
@@ -578,22 +590,40 @@ internal sealed partial class AccountWizardView : View
     }
 
     private static void ToggleCalendarSelection(
-        List<(string Id, string Name, string? Url, bool Selected)> discovered,
+        List<(string Id, string Name, string? Url, bool Selected, bool IsSink)> discovered,
         ObservableCollection<string> listItems,
         ListView listView)
     {
         var idx = listView.SelectedItem ?? -1;
         if (idx < 0 || idx >= discovered.Count) return;
-        discovered[idx] = discovered[idx] with { Selected = !discovered[idx].Selected };
+        var nowSelected = !discovered[idx].Selected;
+        // Deselecting clears the sink flag too — a sink that isn't selected has no purpose.
+        var isSink = nowSelected && discovered[idx].IsSink;
+        discovered[idx] = discovered[idx] with { Selected = nowSelected, IsSink = isSink };
         listItems[idx] = FormatCalendarLine(discovered[idx]);
         listView.Source = new ListWrapper<string>(listItems);
     }
 
-    private static string FormatCalendarLine((string Id, string Name, string? Url, bool Selected) cal)
+    private static void ToggleSinkStatus(
+        List<(string Id, string Name, string? Url, bool Selected, bool IsSink)> discovered,
+        ObservableCollection<string> listItems,
+        ListView listView)
+    {
+        var idx = listView.SelectedItem ?? -1;
+        if (idx < 0 || idx >= discovered.Count) return;
+        var nowSink = !discovered[idx].IsSink;
+        // Marking as sink implies the calendar must be included in the config.
+        discovered[idx] = discovered[idx] with { IsSink = nowSink, Selected = discovered[idx].Selected || nowSink };
+        listItems[idx] = FormatCalendarLine(discovered[idx]);
+        listView.Source = new ListWrapper<string>(listItems);
+    }
+
+    private static string FormatCalendarLine((string Id, string Name, string? Url, bool Selected, bool IsSink) cal)
     {
         var check = cal.Selected ? "[x]" : "[ ]";
         var display = cal.Name.Length > 45 ? cal.Name[..45] + "..." : cal.Name;
-        return $"  {check} {display}";
+        var sinkTag = cal.IsSink ? "  [SINK]" : "";
+        return $"  {check} {display}{sinkTag}";
     }
 
     private void RenderAuthTestStep()
