@@ -14,6 +14,7 @@ public sealed class SyncScheduler : BackgroundService
     private readonly AccountStatusTracker _statusTracker;
     private readonly WebSocketBroadcaster _broadcaster;
     private readonly StorageConfig _storageConfig;
+    private readonly FreeBusySinkService _freeBusySink;
     private readonly ILogger<SyncScheduler> _logger;
     private readonly ILoggerFactory _loggerFactory;
     private readonly TimeSpan _interval;
@@ -25,6 +26,7 @@ public sealed class SyncScheduler : BackgroundService
         AccountStatusTracker statusTracker,
         WebSocketBroadcaster broadcaster,
         PimConfig config,
+        FreeBusySinkService freeBusySink,
         ILogger<SyncScheduler> logger,
         ILoggerFactory loggerFactory)
     {
@@ -34,6 +36,7 @@ public sealed class SyncScheduler : BackgroundService
         _statusTracker = statusTracker;
         _broadcaster = broadcaster;
         _storageConfig = config.Storage;
+        _freeBusySink = freeBusySink;
         _logger = logger;
         _loggerFactory = loggerFactory;
         _interval = TimeSpan.FromMinutes(5);
@@ -60,6 +63,7 @@ public sealed class SyncScheduler : BackgroundService
         var worker = new AccountSyncWorker(
             _registry, _emailRepo, _calendarRepo,
             _statusTracker, _broadcaster, _storageConfig,
+            _freeBusySink,
             _loggerFactory.CreateLogger<AccountSyncWorker>());
 
         foreach (var accountId in _registry.AccountIds)

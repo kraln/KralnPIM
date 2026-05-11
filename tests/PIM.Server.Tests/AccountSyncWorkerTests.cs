@@ -23,6 +23,7 @@ public class AccountSyncWorkerTests
     private readonly WebSocketBroadcaster _broadcaster;
     private readonly ProviderRegistry _registry;
     private readonly StorageConfig _storageConfig;
+    private readonly FreeBusySinkService _freeBusySink;
 
     public AccountSyncWorkerTests()
     {
@@ -37,6 +38,13 @@ public class AccountSyncWorkerTests
         _broadcaster = new WebSocketBroadcaster(NullLogger<WebSocketBroadcaster>.Instance);
         _registry = CreateRegistryWithProviders();
         _storageConfig = new StorageConfig("test.db", "/tmp/attach", 6, 6);
+
+        var pimConfig = new PimConfig(
+            [], new UiConfig("UTC", null), new SystemConfig(null, "open-meteo"),
+            _storageConfig, new ServerConfig("127.0.0.1", 9400, 9401));
+        _freeBusySink = new FreeBusySinkService(
+            _registry, _calendarRepo, Substitute.For<ISyncStateRepository>(),
+            pimConfig, NullLogger<FreeBusySinkService>.Instance);
     }
 
     private ProviderRegistry CreateRegistryWithProviders()
@@ -47,6 +55,7 @@ public class AccountSyncWorkerTests
         registry.GetMailProvider("acc-1").Returns(_mailProvider);
         registry.GetCalendarProviders("acc-1").Returns(new List<ICalendarProvider> { _calendarProvider });
         registry.AccountIds.Returns(new[] { "acc-1" });
+        registry.Sinks.Returns(new List<SinkInfo>());
         return registry;
     }
 
@@ -55,6 +64,7 @@ public class AccountSyncWorkerTests
         return new AccountSyncWorker(
             _registry, _emailRepo, _calendarRepo,
             _statusTracker, _broadcaster, _storageConfig,
+            _freeBusySink,
             NullLogger<AccountSyncWorker>.Instance);
     }
 

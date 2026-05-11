@@ -55,6 +55,7 @@ internal static class ServiceRegistration
     {
         services.AddSingleton<AccountStatusTracker>();
         services.AddSingleton<WebSocketBroadcaster>();
+        services.AddSingleton<FreeBusySinkService>();
         services.AddHostedService<SyncScheduler>();
         return services;
     }

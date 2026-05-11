@@ -10,10 +10,13 @@ using PIM.Sync.Imap;
 
 namespace PIM.Server.Registration;
 
+public sealed record SinkInfo(string AccountId, string CalendarId, ICalendarProvider Provider);
+
 public class ProviderRegistry
 {
     private readonly Dictionary<string, IMailProvider> _mailProviders = new();
     private readonly Dictionary<string, List<ICalendarProvider>> _calendarProviders = new();
+    private readonly Dictionary<string, SinkInfo> _sinkProviders = new();
     private readonly Dictionary<string, GoogleCredentialManager> _googleCredManagers = new();
     private readonly ILogger<ProviderRegistry> _logger;
 
@@ -33,7 +36,15 @@ public class ProviderRegistry
     public virtual IReadOnlyList<ICalendarProvider> AllCalendarProviders =>
         _calendarProviders.Values.SelectMany(p => p).ToList();
 
-    public virtual IEnumerable<string> AccountIds => _mailProviders.Keys.Union(_calendarProviders.Keys);
+    public virtual IReadOnlyList<SinkInfo> Sinks => _sinkProviders.Values.ToList();
+
+    public virtual bool IsSink(string accountId, string calendarId) =>
+        _sinkProviders.ContainsKey(SinkKey(accountId, calendarId));
+
+    private static string SinkKey(string accountId, string calendarId) => $"{accountId}:{calendarId}";
+
+    public virtual IEnumerable<string> AccountIds =>
+        _mailProviders.Keys.Union(_calendarProviders.Keys).Union(_sinkProviders.Values.Select(s => s.AccountId));
 
     public async Task InitializeAsync(
         PimConfig config,
@@ -99,6 +110,31 @@ public class ProviderRegistry
                     _logger.LogError(ex, "Failed to authenticate calendar provider for {AccountId}, marking offline", accountId);
                     statusTracker.MarkOffline(accountId, OfflineReason.Error);
                 }
+            }
+        }
+
+        // Sink providers that aren't shared with _calendarProviders (CalDav sinks) still need auth.
+        foreach (var sink in _sinkProviders.Values)
+        {
+            var alreadyAuthed = _calendarProviders.GetValueOrDefault(sink.AccountId)?.Contains(sink.Provider) == true;
+            if (alreadyAuthed)
+                continue;
+
+            try
+            {
+                _logger.LogInformation("Authenticating free/busy sink provider for {AccountId}/{CalendarId}", sink.AccountId, sink.CalendarId);
+                await sink.Provider.AuthenticateAsync(ct);
+                statusTracker.MarkOnline(sink.AccountId);
+            }
+            catch (ReauthorizationRequiredException)
+            {
+                _logger.LogWarning("Sink {AccountId}/{CalendarId} requires re-authorization", sink.AccountId, sink.CalendarId);
+                statusTracker.MarkOffline(sink.AccountId, OfflineReason.AuthRequired);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogError(ex, "Failed to authenticate sink provider for {AccountId}/{CalendarId}, marking offline", sink.AccountId, sink.CalendarId);
+                statusTracker.MarkOffline(sink.AccountId, OfflineReason.Error);
             }
         }
     }
@@ -203,18 +239,24 @@ public class ProviderRegistry
         _googleCredManagers[account.Id] = credMgr;
 
         var rateLimiter = new TokenBucketRateLimiter(250, 250);
-        var allowedCalendarIds = account.Calendars?.Select(c => c.Id).ToHashSet();
+        var allowedCalendarIds = account.Calendars?
+            .Where(c => c.FreebusySink != true)
+            .Select(c => c.Id)
+            .ToHashSet();
 
         _mailProviders[account.Id] = new GoogleMailProvider(
             account.Id, credMgr, syncStateRepo, rateLimiter,
             loggerFactory.CreateLogger<GoogleMailProvider>());
 
-        _calendarProviders[account.Id] = [
-            new GoogleCalendarProvider(
-                account.Id, credMgr, syncStateRepo, rateLimiter,
-                loggerFactory.CreateLogger<GoogleCalendarProvider>(),
-                allowedCalendarIds)
-        ];
+        var calendarProvider = new GoogleCalendarProvider(
+            account.Id, credMgr, syncStateRepo, rateLimiter,
+            loggerFactory.CreateLogger<GoogleCalendarProvider>(),
+            allowedCalendarIds);
+
+        _calendarProviders[account.Id] = [calendarProvider];
+
+        foreach (var sink in account.Calendars?.Where(c => c.FreebusySink == true) ?? [])
+            _sinkProviders[SinkKey(account.Id, sink.Id)] = new SinkInfo(account.Id, sink.Id, calendarProvider);
     }
 
     private void BuildGraphProviders(
@@ -228,18 +270,24 @@ public class ProviderRegistry
         var graphAuth = new GraphAuthProvider(
             account.Id, o365ClientId, o365TenantId,
             authRepo, loggerFactory.CreateLogger<GraphAuthProvider>());
-        var allowedCalendarIds = account.Calendars?.Select(c => c.Id).ToHashSet();
+        var allowedCalendarIds = account.Calendars?
+            .Where(c => c.FreebusySink != true)
+            .Select(c => c.Id)
+            .ToHashSet();
 
         _mailProviders[account.Id] = new GraphMailProvider(
             account.Id, graphAuth, syncStateRepo,
             loggerFactory.CreateLogger<GraphMailProvider>());
 
-        _calendarProviders[account.Id] = [
-            new GraphCalendarProvider(
-                account.Id, graphAuth, syncStateRepo,
-                loggerFactory.CreateLogger<GraphCalendarProvider>(),
-                allowedCalendarIds)
-        ];
+        var calendarProvider = new GraphCalendarProvider(
+            account.Id, graphAuth, syncStateRepo,
+            loggerFactory.CreateLogger<GraphCalendarProvider>(),
+            allowedCalendarIds);
+
+        _calendarProviders[account.Id] = [calendarProvider];
+
+        foreach (var sink in account.Calendars?.Where(c => c.FreebusySink == true) ?? [])
+            _sinkProviders[SinkKey(account.Id, sink.Id)] = new SinkInfo(account.Id, sink.Id, calendarProvider);
     }
 
     private async Task BuildImapProvidersAsync(
@@ -262,7 +310,8 @@ public class ProviderRegistry
             account.SmtpHost!, account.SmtpPort!.Value,
             account.Username!, password,
             loggerFactory.CreateLogger<ImapConnectionManager>(),
-            account.IgnoreSslErrors == true);
+            account.IgnoreSslErrors == true,
+            account.SkipCertificateRevocationCheck == true);
 
         _mailProviders[account.Id] = new ImapMailProvider(
             account.Id, connMgr, syncStateRepo,
@@ -306,10 +355,15 @@ public class ProviderRegistry
                     httpClient = httpClientFactory.CreateClient($"caldav-{calConfig.Id}");
                 }
 
-                calendars.Add(new CalDavCalendarProvider(
+                var provider = new CalDavCalendarProvider(
                     account.Id, calConfig.Id, calConfig.Url!,
                     account.Username!, authRepo, syncStateRepo,
-                    httpClient, loggerFactory.CreateLogger<CalDavCalendarProvider>()));
+                    httpClient, loggerFactory.CreateLogger<CalDavCalendarProvider>());
+
+                if (calConfig.FreebusySink == true)
+                    _sinkProviders[SinkKey(account.Id, calConfig.Id)] = new SinkInfo(account.Id, calConfig.Id, provider);
+                else
+                    calendars.Add(provider);
             }
         }
 

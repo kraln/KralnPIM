@@ -41,7 +41,8 @@ public sealed record CalendarSourceConfig(
     string Id,
     CalendarType Type,
     string? Url,
-    string? Color = null
+    string? Color = null,
+    bool? FreebusySink = null
 );
 
 public sealed record UiConfig(

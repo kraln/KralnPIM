@@ -24,6 +24,7 @@ namespace PIM.Server.Models;
 [JsonSerializable(typeof(ReauthResponse))]
 [JsonSerializable(typeof(SearchResult))]
 [JsonSerializable(typeof(SearchScope))]
+[JsonSerializable(typeof(FreeBusyShadow))]
 public partial class ServerJsonContext : JsonSerializerContext
 {
 }

@@ -15,6 +15,7 @@ public sealed class AccountSyncWorker
     private readonly AccountStatusTracker _statusTracker;
     private readonly WebSocketBroadcaster _broadcaster;
     private readonly StorageConfig _storageConfig;
+    private readonly FreeBusySinkService _freeBusySink;
     private readonly ILogger<AccountSyncWorker> _logger;
 
     private const int MaxRetries = 3;
@@ -26,6 +27,7 @@ public sealed class AccountSyncWorker
         AccountStatusTracker statusTracker,
         WebSocketBroadcaster broadcaster,
         StorageConfig storageConfig,
+        FreeBusySinkService freeBusySink,
         ILogger<AccountSyncWorker> logger)
     {
         _registry = registry;
@@ -34,6 +36,7 @@ public sealed class AccountSyncWorker
         _statusTracker = statusTracker;
         _broadcaster = broadcaster;
         _storageConfig = storageConfig;
+        _freeBusySink = freeBusySink;
         _logger = logger;
     }
 
@@ -51,7 +54,20 @@ public sealed class AccountSyncWorker
 
         await SyncMailAsync(accountId, ct);
         await SyncCalendarsAsync(accountId, ct);
+        await RefreshFreeBusySinksAsync(ct);
         await PurgeOldDataAsync(ct);
+    }
+
+    private async Task RefreshFreeBusySinksAsync(CancellationToken ct)
+    {
+        try
+        {
+            await _freeBusySink.RefreshAsync(ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogError(ex, "Free/busy sink refresh failed");
+        }
     }
 
     private async Task<bool> TryReauthenticateAsync(string accountId, CancellationToken ct)

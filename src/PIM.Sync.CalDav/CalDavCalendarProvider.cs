@@ -79,7 +79,7 @@ public sealed class CalDavCalendarProvider : ICalendarProvider
         return await FullSyncAsync(currentCtag, rangeStart, rangeEnd, ct);
     }
 
-    public async Task CreateEventAsync(CalendarEvent evt, CancellationToken ct)
+    public async Task<string> CreateEventAsync(CalendarEvent evt, CancellationToken ct)
     {
         EnsureClient();
 
@@ -88,6 +88,8 @@ public sealed class CalDavCalendarProvider : ICalendarProvider
         await _client!.PutEventAsync(href, icalData, ct);
 
         _logger.LogInformation("Created CalDAV event '{Summary}' ({EventId})", evt.Summary, evt.EventId);
+
+        return evt.EventId;
     }
 
     public async Task UpdateEventAsync(CalendarEvent evt, CancellationToken ct)

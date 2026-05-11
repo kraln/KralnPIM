@@ -29,3 +29,5 @@ public sealed record AccountStatusInfo(
     DateTimeOffset? LastSync);
 
 public sealed record ReauthResponse(string? AuthUrl, string Message);
+
+public sealed record FreeBusyShadow(string Hash, List<string> EventIds);

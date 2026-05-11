@@ -1,0 +1,30 @@
+accounts:
+  - id: "my-radicale"
+    type: caldav
+    display_name: "Radicale"
+    username: "user@example.com"
+    calendars:
+      - id: "personal"
+        type: caldav
+        url: "https://radicale.example.com/user/personal.ics"
+      - id: "planning"
+        type: caldav
+        url: "https://radicale.example.com/user/planning.ics"
+        freebusy_sink: true
+
+ui:
+  timezone_primary: "UTC"
+
+system:
+  weather_provider: "open-meteo"
+
+storage:
+  db_path: "~/.pim/pim.db"
+  attachment_download_dir: "~/Downloads"
+  buffer_months_back: 3
+  buffer_months_forward: 3
+
+server:
+  listen_address: "127.0.0.1"
+  rest_port: 9400
+  ws_port: 9401

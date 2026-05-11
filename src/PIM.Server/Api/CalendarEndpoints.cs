@@ -34,6 +34,10 @@ internal static class CalendarEndpoints
             WebSocketBroadcaster broadcaster,
             CancellationToken ct) =>
         {
+            if (registry.IsSink(evt.AccountId, evt.CalendarId))
+                return Results.Json(new ErrorResponse($"Calendar '{evt.CalendarId}' is a free/busy sink and cannot accept manual events."),
+                    ServerJsonContext.Default.ErrorResponse, statusCode: 400);
+
             if (!tracker.IsOnline(evt.AccountId))
                 return Results.Json(new ErrorResponse($"Account '{evt.AccountId}' is offline."),
                     ServerJsonContext.Default.ErrorResponse, statusCode: 503);
@@ -43,10 +47,11 @@ internal static class CalendarEndpoints
                 return Results.Json(new ErrorResponse($"No calendar provider for account '{evt.AccountId}'."),
                     ServerJsonContext.Default.ErrorResponse, statusCode: 404);
 
-            await providers[0].CreateEventAsync(evt, ct);
-            await repo.UpsertEventsAsync([evt], ct);
-            await broadcaster.BroadcastAsync(new CalendarSyncEvent(evt.AccountId, 1), ct);
-            return Results.Created($"/api/calendar/events/{evt.EventId}", evt);
+            var assignedId = await providers[0].CreateEventAsync(evt, ct);
+            var stored = evt with { EventId = assignedId };
+            await repo.UpsertEventsAsync([stored], ct);
+            await broadcaster.BroadcastAsync(new CalendarSyncEvent(stored.AccountId, 1), ct);
+            return Results.Created($"/api/calendar/events/{stored.EventId}", stored);
         });
 
         group.MapPut("/{eventId}", async (
@@ -58,6 +63,10 @@ internal static class CalendarEndpoints
             WebSocketBroadcaster broadcaster,
             CancellationToken ct) =>
         {
+            if (registry.IsSink(evt.AccountId, evt.CalendarId))
+                return Results.Json(new ErrorResponse($"Calendar '{evt.CalendarId}' is a free/busy sink and cannot accept manual events."),
+                    ServerJsonContext.Default.ErrorResponse, statusCode: 400);
+
             if (!tracker.IsOnline(evt.AccountId))
                 return Results.Json(new ErrorResponse($"Account '{evt.AccountId}' is offline."),
                     ServerJsonContext.Default.ErrorResponse, statusCode: 503);
