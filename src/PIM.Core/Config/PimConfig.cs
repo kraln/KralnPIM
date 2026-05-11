@@ -33,7 +33,8 @@ public sealed record AccountConfig(
     bool? IgnoreSslErrors = null,
     string? CalDavUrl = null,
     string? Color = null,
-    string? SenderName = null
+    string? SenderName = null,
+    bool? SkipCertificateRevocationCheck = null
 );
 
 public sealed record CalendarSourceConfig(

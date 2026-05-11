@@ -100,6 +100,7 @@ public static class ConfigSerializer
         IgnoreSslErrors = account.IgnoreSslErrors,
         CalDavUrl = account.CalDavUrl,
         SenderName = account.SenderName,
+        SkipCertificateRevocationCheck = account.SkipCertificateRevocationCheck,
     };
 
     private static string FormatAccountType(AccountType type) => type switch
@@ -190,6 +191,9 @@ internal sealed class AccountDto
 
     [YamlMember(Order = 15)]
     public string? SenderName { get; set; }
+
+    [YamlMember(Order = 16)]
+    public bool? SkipCertificateRevocationCheck { get; set; }
 }
 
 internal sealed class CalendarDto
