@@ -5,7 +5,6 @@ using PIM.Core.Serialization;
 using PIM.Server.Models;
 using PIM.Server.Api;
 using PIM.Server.Registration;
-using PIM.Server.Services;
 using PIM.Server.WebSocket;
 
 var configPath = args.Length > 0
@@ -48,7 +47,9 @@ var sqlDir = FindSqlDirectory();
 var migrationRunner = app.Services.GetRequiredService<MigrationRunner>();
 await migrationRunner.RunAsync(sqlDir);
 
-// 5. Initialize and authenticate providers
+// 5. Initialize providers (build instances from config — local DB reads only).
+//    Authentication runs in AccountAuthenticationService (hosted) so a slow/hung
+//    provider cannot block Kestrel from binding its listening sockets.
 var registry = app.Services.GetRequiredService<ProviderRegistry>();
 await registry.InitializeAsync(
     config,
@@ -56,10 +57,6 @@ await registry.InitializeAsync(
     app.Services.GetRequiredService<ISyncStateRepository>(),
     app.Services.GetRequiredService<ILoggerFactory>(),
     app.Services.GetRequiredService<IHttpClientFactory>(),
-    CancellationToken.None);
-
-await registry.AuthenticateAllAsync(
-    app.Services.GetRequiredService<AccountStatusTracker>(),
     CancellationToken.None);
 
 // 6. WebSocket middleware on WS port
