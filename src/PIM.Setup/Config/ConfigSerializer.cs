@@ -102,6 +102,7 @@ public static class ConfigSerializer
         CalDavUrl = account.CalDavUrl,
         SenderName = account.SenderName,
         SkipCertificateRevocationCheck = account.SkipCertificateRevocationCheck,
+        EventKitBinaryPath = account.EventKitBinaryPath,
     };
 
     private static string FormatAccountType(AccountType type) => type switch
@@ -110,6 +111,7 @@ public static class ConfigSerializer
         AccountType.Google => "google",
         AccountType.Office365 => "office365",
         AccountType.CalDav => "caldav",
+        AccountType.EventKit => "eventkit",
         _ => throw new ArgumentOutOfRangeException(nameof(type), type, $"Unknown account type: {type}"),
     };
 
@@ -118,6 +120,7 @@ public static class ConfigSerializer
         CalendarType.CalDav => "caldav",
         CalendarType.Google => "google",
         CalendarType.Office365 => "office365",
+        CalendarType.EventKit => "eventkit",
         _ => throw new ArgumentOutOfRangeException(nameof(type), type, $"Unknown calendar type: {type}"),
     };
 }
@@ -195,6 +198,9 @@ internal sealed class AccountDto
 
     [YamlMember(Order = 16)]
     public bool? SkipCertificateRevocationCheck { get; set; }
+
+    [YamlMember(Order = 17)]
+    public string? EventKitBinaryPath { get; set; }
 }
 
 internal sealed class CalendarDto

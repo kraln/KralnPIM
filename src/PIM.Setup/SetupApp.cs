@@ -197,6 +197,7 @@ internal sealed class SetupApp : Window
                 AccountType.Google or AccountType.Office365 =>
                     await AuthRepo.GetOAuthTokenAsync(account.Id) is not null
                         ? "Has token" : "No token",
+                AccountType.EventKit => "OS-managed (TCC)",
                 _ => "Unknown"
             };
         }
