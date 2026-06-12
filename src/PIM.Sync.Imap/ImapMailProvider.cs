@@ -113,11 +113,15 @@ public sealed class ImapMailProvider : IMailProvider
             ?? throw new InvalidOperationException(
                 $"Attachment '{filename}' not found in message '{messageId}'.");
 
+        var content = attachment.Content
+            ?? throw new InvalidOperationException(
+                $"Attachment '{filename}' in message '{messageId}' has no content body.");
+
         Directory.CreateDirectory(targetDir);
         var filePath = Path.Combine(targetDir, filename);
 
         await using var stream = File.Create(filePath);
-        await attachment.Content.DecodeToAsync(stream, ct);
+        await content.DecodeToAsync(stream, ct);
 
         return filePath;
     }
