@@ -74,7 +74,8 @@ public static class ConfigLoader
             c.Id ?? "",
             ParseCalendarType(c.Type),
             c.Url,
-            c.Color
+            c.Color,
+            c.FreebusySink
         )).ToList();
 
         return new AccountConfig(
@@ -232,6 +233,7 @@ public static class ConfigLoader
         public string? Type { get; set; }
         public string? Url { get; set; }
         public string? Color { get; set; }
+        public bool? FreebusySink { get; set; }
     }
 
     private sealed class UiDto

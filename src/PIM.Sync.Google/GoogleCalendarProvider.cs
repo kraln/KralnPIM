@@ -101,16 +101,18 @@ public sealed class GoogleCalendarProvider : ICalendarProvider
         return new SyncResult<CalendarEvent>(allUpserted, allDeletedIds, newSyncToken);
     }
 
-    public async Task CreateEventAsync(CalendarEvent evt, CancellationToken ct)
+    public async Task<string> CreateEventAsync(CalendarEvent evt, CancellationToken ct)
     {
         EnsureService();
         await _rateLimiter.WaitAsync(10, ct);
 
         var googleEvent = CalendarMapper.ToGoogleEvent(evt);
-        await _service!.Events.Insert(googleEvent, evt.CalendarId).ExecuteAsync(ct);
+        var created = await _service!.Events.Insert(googleEvent, evt.CalendarId).ExecuteAsync(ct);
 
         _logger.LogInformation("Created event '{Summary}' on calendar {CalendarId}",
             evt.Summary, evt.CalendarId);
+
+        return created.Id;
     }
 
     public async Task UpdateEventAsync(CalendarEvent evt, CancellationToken ct)

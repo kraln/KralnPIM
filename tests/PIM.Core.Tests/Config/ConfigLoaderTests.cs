@@ -73,6 +73,17 @@ public class ConfigLoaderTests
     }
 
     [Fact]
+    public void Load_FreebusySinkFlag_ParsedOnPerCalendarBasis()
+    {
+        var config = ConfigLoader.Load(GetTestConfigPath("valid_freebusy_sink.yaml"));
+
+        var calendars = config.Accounts.Single().Calendars!;
+        Assert.Equal(2, calendars.Count);
+        Assert.Null(calendars.Single(c => c.Id == "personal").FreebusySink);
+        Assert.True(calendars.Single(c => c.Id == "planning").FreebusySink);
+    }
+
+    [Fact]
     public void Load_MissingFile_Throws()
     {
         Assert.ThrowsAny<IOException>(() =>

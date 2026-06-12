@@ -96,6 +96,7 @@ public static class ConfigSerializer
             Id = c.Id,
             Type = FormatCalendarType(c.Type),
             Url = c.Url,
+            FreebusySink = c.FreebusySink,
         }).ToList(),
         IgnoreSslErrors = account.IgnoreSslErrors,
         CalDavUrl = account.CalDavUrl,
@@ -206,6 +207,9 @@ internal sealed class CalendarDto
 
     [YamlMember(Order = 2)]
     public string? Url { get; set; }
+
+    [YamlMember(Order = 3)]
+    public bool? FreebusySink { get; set; }
 }
 
 internal sealed class UiDto
