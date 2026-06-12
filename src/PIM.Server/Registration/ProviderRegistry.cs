@@ -68,48 +68,28 @@ public class ProviderRegistry
         }
     }
 
+    internal static TimeSpan PerProviderAuthTimeout { get; set; } = TimeSpan.FromSeconds(30);
+
     public async Task AuthenticateAllAsync(AccountStatusTracker statusTracker, CancellationToken ct)
     {
-        foreach (var (accountId, provider) in _mailProviders)
+        var accountIds = _mailProviders.Keys.Union(_calendarProviders.Keys).ToList();
+        var tasks = accountIds.Select(id => AuthenticateAccountAsync(id, statusTracker, ct));
+        await Task.WhenAll(tasks);
+    }
+
+    private async Task AuthenticateAccountAsync(
+        string accountId, AccountStatusTracker statusTracker, CancellationToken ct)
+    {
+        if (_mailProviders.TryGetValue(accountId, out var mailProvider))
         {
-            try
-            {
-                _logger.LogInformation("Authenticating mail provider for {AccountId}", accountId);
-                await provider.AuthenticateAsync(ct);
-                statusTracker.MarkOnline(accountId);
-            }
-            catch (ReauthorizationRequiredException)
-            {
-                _logger.LogWarning("Account {AccountId} requires re-authorization for mail", accountId);
-                statusTracker.MarkOffline(accountId, OfflineReason.AuthRequired);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                _logger.LogError(ex, "Failed to authenticate mail provider for {AccountId}, marking offline", accountId);
-                statusTracker.MarkOffline(accountId, OfflineReason.Error);
-            }
+            await AuthenticateOneAsync(accountId, "mail", mailProvider.AuthenticateAsync, statusTracker, ct);
         }
 
-        foreach (var (accountId, providers) in _calendarProviders)
+        if (_calendarProviders.TryGetValue(accountId, out var calProviders))
         {
-            foreach (var provider in providers)
+            foreach (var provider in calProviders)
             {
-                try
-                {
-                    _logger.LogInformation("Authenticating calendar provider for {AccountId}", accountId);
-                    await provider.AuthenticateAsync(ct);
-                    statusTracker.MarkOnline(accountId);
-                }
-                catch (ReauthorizationRequiredException)
-                {
-                    _logger.LogWarning("Account {AccountId} requires re-authorization for calendar", accountId);
-                    statusTracker.MarkOffline(accountId, OfflineReason.AuthRequired);
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    _logger.LogError(ex, "Failed to authenticate calendar provider for {AccountId}, marking offline", accountId);
-                    statusTracker.MarkOffline(accountId, OfflineReason.Error);
-                }
+                await AuthenticateOneAsync(accountId, "calendar", provider.AuthenticateAsync, statusTracker, ct);
             }
         }
 
@@ -136,6 +116,45 @@ public class ProviderRegistry
                 _logger.LogError(ex, "Failed to authenticate sink provider for {AccountId}/{CalendarId}, marking offline", sink.AccountId, sink.CalendarId);
                 statusTracker.MarkOffline(sink.AccountId, OfflineReason.Error);
             }
+        }
+    }
+
+    private async Task AuthenticateOneAsync(
+        string accountId,
+        string kind,
+        Func<CancellationToken, Task> authenticate,
+        AccountStatusTracker statusTracker,
+        CancellationToken ct)
+    {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(PerProviderAuthTimeout);
+
+        try
+        {
+            _logger.LogInformation("Authenticating {Kind} provider for {AccountId}", kind, accountId);
+            await authenticate(cts.Token);
+            statusTracker.MarkOnline(accountId);
+        }
+        catch (OperationCanceledException) when (cts.IsCancellationRequested && !ct.IsCancellationRequested)
+        {
+            _logger.LogWarning(
+                "Timed out authenticating {Kind} provider for {AccountId} after {Timeout}s, marking offline",
+                kind, accountId, PerProviderAuthTimeout.TotalSeconds);
+            statusTracker.MarkOffline(accountId, OfflineReason.Error);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (ReauthorizationRequiredException)
+        {
+            _logger.LogWarning("Account {AccountId} requires re-authorization for {Kind}", accountId, kind);
+            statusTracker.MarkOffline(accountId, OfflineReason.AuthRequired);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to authenticate {Kind} provider for {AccountId}, marking offline", kind, accountId);
+            statusTracker.MarkOffline(accountId, OfflineReason.Error);
         }
     }
 
