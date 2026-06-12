@@ -4,6 +4,7 @@ using PIM.Core.Data;
 using PIM.Core.Providers;
 using PIM.Server.Services;
 using PIM.Sync.CalDav;
+using PIM.Sync.EventKit;
 using PIM.Sync.Google;
 using PIM.Sync.Graph;
 using PIM.Sync.Imap;
@@ -241,6 +242,9 @@ public class ProviderRegistry
             case AccountType.CalDav:
                 await BuildCalDavProvidersAsync(account, authRepo, syncStateRepo, loggerFactory, httpClientFactory, ct);
                 break;
+            case AccountType.EventKit:
+                BuildEventKitProviders(account, loggerFactory);
+                break;
         }
     }
 
@@ -388,5 +392,22 @@ public class ProviderRegistry
 
         if (calendars.Count > 0)
             _calendarProviders[account.Id] = calendars;
+    }
+
+    private void BuildEventKitProviders(AccountConfig account, ILoggerFactory loggerFactory)
+    {
+        var binaryPath = account.EventKitBinaryPath ?? "eventkit-cli";
+        var allowedCalendarIds = account.Calendars?
+            .Where(c => c.Type == CalendarType.EventKit && c.FreebusySink != true)
+            .Select(c => c.Id)
+            .ToHashSet();
+
+        var provider = new EventKitCalendarProvider(
+            account.Id, binaryPath, allowedCalendarIds, loggerFactory);
+
+        _calendarProviders[account.Id] = [provider];
+
+        foreach (var sink in account.Calendars?.Where(c => c.Type == CalendarType.EventKit && c.FreebusySink == true) ?? [])
+            _sinkProviders[SinkKey(account.Id, sink.Id)] = new SinkInfo(account.Id, sink.Id, provider);
     }
 }

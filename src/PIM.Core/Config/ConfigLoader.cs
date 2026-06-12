@@ -96,7 +96,8 @@ public static class ConfigLoader
             dto.CalDavUrl,
             dto.Color,
             dto.SenderName,
-            dto.SkipCertificateRevocationCheck
+            dto.SkipCertificateRevocationCheck,
+            dto.EventKitBinaryPath
         );
     }
 
@@ -106,6 +107,7 @@ public static class ConfigLoader
         "google" => AccountType.Google,
         "office365" => AccountType.Office365,
         "caldav" => AccountType.CalDav,
+        "eventkit" => AccountType.EventKit,
         _ => throw new ConfigValidationException([$"Unknown account type: '{type}'"])
     };
 
@@ -114,6 +116,7 @@ public static class ConfigLoader
         "caldav" => CalendarType.CalDav,
         "google" => CalendarType.Google,
         "office365" => CalendarType.Office365,
+        "eventkit" => CalendarType.EventKit,
         _ => throw new ConfigValidationException([$"Unknown calendar type: '{type}'"])
     };
 
@@ -225,6 +228,7 @@ public static class ConfigLoader
         public string? Color { get; set; }
         public string? SenderName { get; set; }
         public bool? SkipCertificateRevocationCheck { get; set; }
+        public string? EventKitBinaryPath { get; set; }
     }
 
     private sealed class CalendarDto

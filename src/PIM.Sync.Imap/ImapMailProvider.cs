@@ -49,7 +49,8 @@ public sealed class ImapMailProvider : IMailProvider
     {
         EnsureAuthenticated();
         var client = await _connectionManager.GetImapClientAsync(ct);
-        var inbox = client.Inbox;
+        var inbox = client.Inbox
+            ?? throw new InvalidOperationException("IMAP server has no INBOX folder.");
 
         if (!inbox.IsOpen)
             await inbox.OpenAsync(FolderAccess.ReadOnly, ct);
@@ -83,7 +84,8 @@ public sealed class ImapMailProvider : IMailProvider
     {
         EnsureAuthenticated();
         var client = await _connectionManager.GetImapClientAsync(ct);
-        var inbox = client.Inbox;
+        var inbox = client.Inbox
+            ?? throw new InvalidOperationException("IMAP server has no INBOX folder.");
 
         if (!inbox.IsOpen)
             await inbox.OpenAsync(FolderAccess.ReadOnly, ct);
@@ -99,7 +101,8 @@ public sealed class ImapMailProvider : IMailProvider
     {
         EnsureAuthenticated();
         var client = await _connectionManager.GetImapClientAsync(ct);
-        var inbox = client.Inbox;
+        var inbox = client.Inbox
+            ?? throw new InvalidOperationException("IMAP server has no INBOX folder.");
 
         if (!inbox.IsOpen)
             await inbox.OpenAsync(FolderAccess.ReadOnly, ct);
@@ -113,11 +116,15 @@ public sealed class ImapMailProvider : IMailProvider
             ?? throw new InvalidOperationException(
                 $"Attachment '{filename}' not found in message '{messageId}'.");
 
+        var content = attachment.Content
+            ?? throw new InvalidOperationException(
+                $"Attachment '{filename}' in message '{messageId}' has no content body.");
+
         Directory.CreateDirectory(targetDir);
         var filePath = Path.Combine(targetDir, filename);
 
         await using var stream = File.Create(filePath);
-        await attachment.Content.DecodeToAsync(stream, ct);
+        await content.DecodeToAsync(stream, ct);
 
         return filePath;
     }
@@ -139,7 +146,8 @@ public sealed class ImapMailProvider : IMailProvider
     {
         EnsureAuthenticated();
         var client = await _connectionManager.GetImapClientAsync(ct);
-        var inbox = client.Inbox;
+        var inbox = client.Inbox
+            ?? throw new InvalidOperationException("IMAP server has no INBOX folder.");
 
         if (!inbox.IsOpen)
             await inbox.OpenAsync(FolderAccess.ReadOnly, ct);
@@ -168,7 +176,8 @@ public sealed class ImapMailProvider : IMailProvider
     {
         EnsureAuthenticated();
         var client = await _connectionManager.GetImapClientAsync(ct);
-        var inbox = client.Inbox;
+        var inbox = client.Inbox
+            ?? throw new InvalidOperationException("IMAP server has no INBOX folder.");
 
         if (!inbox.IsOpen || inbox.Access != FolderAccess.ReadWrite)
             await inbox.OpenAsync(FolderAccess.ReadWrite, ct);
@@ -190,7 +199,8 @@ public sealed class ImapMailProvider : IMailProvider
     {
         EnsureAuthenticated();
         var client = await _connectionManager.GetImapClientAsync(ct);
-        var inbox = client.Inbox;
+        var inbox = client.Inbox
+            ?? throw new InvalidOperationException("IMAP server has no INBOX folder.");
 
         if (!inbox.IsOpen || inbox.Access != FolderAccess.ReadWrite)
             await inbox.OpenAsync(FolderAccess.ReadWrite, ct);

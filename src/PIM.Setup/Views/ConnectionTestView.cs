@@ -148,7 +148,8 @@ internal sealed class ConnectionTestView : View
         await client.ConnectAsync(account.ImapHost, account.ImapPort ?? 993, options, ct);
         await client.AuthenticateAsync(account.Username ?? "", password, ct);
 
-        var inbox = client.Inbox;
+        var inbox = client.Inbox
+            ?? throw new InvalidOperationException("IMAP server has no INBOX folder.");
         await inbox.OpenAsync(MailKit.FolderAccess.ReadOnly, ct);
         var condstore = client.Capabilities.HasFlag(ImapCapabilities.CondStore);
         var folders = await client.GetFoldersAsync(client.PersonalNamespaces[0], cancellationToken: ct);

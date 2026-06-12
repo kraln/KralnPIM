@@ -5,6 +5,7 @@
     <Project Path="src/PIM.Sync.Graph/PIM.Sync.Graph.csproj" />
     <Project Path="src/PIM.SystemInfo/PIM.SystemInfo.csproj" />
     <Project Path="src/PIM.Sync.CalDav/PIM.Sync.CalDav.csproj" />
+    <Project Path="src/PIM.Sync.EventKit/PIM.Sync.EventKit.csproj" />
     <Project Path="src/PIM.Sync.Imap/PIM.Sync.Imap.csproj" />
     <Project Path="src/PIM.Search/PIM.Search.csproj" />
     <Project Path="src/PIM.Server/PIM.Server.csproj" />

@@ -3,10 +3,10 @@ using System.Text.Json.Serialization;
 namespace PIM.Core.Config;
 
 [JsonConverter(typeof(JsonStringEnumConverter<AccountType>))]
-public enum AccountType { Imap, Google, Office365, CalDav }
+public enum AccountType { Imap, Google, Office365, CalDav, EventKit }
 
 [JsonConverter(typeof(JsonStringEnumConverter<CalendarType>))]
-public enum CalendarType { CalDav, Google, Office365 }
+public enum CalendarType { CalDav, Google, Office365, EventKit }
 
 public sealed record PimConfig(
     List<AccountConfig> Accounts,
@@ -34,7 +34,8 @@ public sealed record AccountConfig(
     string? CalDavUrl = null,
     string? Color = null,
     string? SenderName = null,
-    bool? SkipCertificateRevocationCheck = null
+    bool? SkipCertificateRevocationCheck = null,
+    string? EventKitBinaryPath = null
 );
 
 public sealed record CalendarSourceConfig(

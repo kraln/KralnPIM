@@ -7,6 +7,9 @@ using Terminal.Gui.Input;
 using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
 
+// Terminal.Gui v2 marks ComboBox obsolete with no first-class replacement.
+#pragma warning disable CS0618
+
 namespace PIM.Tui.Views;
 
 internal sealed class EventEditorView : View
