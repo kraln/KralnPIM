@@ -245,7 +245,7 @@ public class FreeBusySinkServiceTests
         calendarRepo.GetEventsInRangeAsync(Arg.Any<DateTimeOffset>(), Arg.Any<DateTimeOffset>(), null, Arg.Any<CancellationToken>())
             .Returns([Event("a", BaseTime, BaseTime.AddHours(1))]);
         sinkA.CreateEventAsync(Arg.Any<CalendarEvent>(), Arg.Any<CancellationToken>())
-            .Throws(new ReauthorizationRequiredException("acc-1", "needs reauth"));
+            .Throws(new ReauthorizationRequiredException("acc-1"));
         sinkB.CreateEventAsync(Arg.Any<CalendarEvent>(), Arg.Any<CancellationToken>()).Returns("id-1");
 
         var svc = new FreeBusySinkService(registry, calendarRepo, syncStateRepo,
