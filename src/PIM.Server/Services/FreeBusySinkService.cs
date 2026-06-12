@@ -55,13 +55,14 @@ public sealed class FreeBusySinkService
             .ToList();
 
         var localTz = ResolveTimezone(_uiConfig.TimezonePrimary);
-        var blocks = Coalesce(sourceEvents, localTz);
-        var hash = HashBlocks(blocks);
 
         foreach (var sink in sinks)
         {
             try
             {
+                var source = sink.IgnoreAllDay ? sourceEvents.Where(e => !e.IsAllDay) : sourceEvents;
+                var blocks = Coalesce(source, localTz);
+                var hash = HashBlocks(blocks);
                 await RefreshSinkAsync(sink, blocks, hash, ct);
             }
             catch (ReauthorizationRequiredException)

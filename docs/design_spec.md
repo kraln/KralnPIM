@@ -158,7 +158,8 @@ public sealed record CalendarSourceConfig(
     CalendarType Type,         // enum: CalDav, Google, Office365
     string? Url,
     string? Color = null,
-    bool? FreebusySink = null  // true → daemon overwrites this calendar with an aggregated busy/free view (see H.7)
+    bool? FreebusySink = null,         // true → daemon overwrites this calendar with an aggregated busy/free view (see H.7)
+    bool? FreebusyIgnoreAllDay = null  // sink-only: exclude all-day events from this sink's aggregation
 );
 ```
 
@@ -797,7 +798,7 @@ A **sink** is a calendar flagged with `freebusy_sink: true` in config. The daemo
 On each sink refresh:
 
 1. **Gather.** Read all events in the buffer window (`buffer_months_back` … `buffer_months_forward`) across every account.
-2. **Filter.** Drop cancelled events, events that are themselves on a sink calendar (so sinks never feed each other), and events whose `Transparency` is `Free`.
+2. **Filter.** Drop cancelled events, events that are themselves on a sink calendar (so sinks never feed each other), and events whose `Transparency` is `Free`. A sink with `freebusy_ignore_all_day` additionally drops all-day events — useful when birthday or holiday calendars mark their events busy at the source, where per-event transparency cannot distinguish them.
 3. **Coalesce.** Sort the remaining intervals and merge them: overlapping intervals combine, and intervals separated by no more than a 5-minute bridge gap join into one block. All-day events expand to full local days in the primary timezone.
 4. **Diff.** Compute a SHA-256 hash over the block boundaries. A shadow record — the hash plus the IDs of the events last created on the sink — is persisted via `ISyncStateRepository` under `freebusy-sink:{calendarId}`. If the hash is unchanged, the refresh is a no-op (no provider calls).
 5. **Rewrite.** On a hash change, delete the previously created events (by the IDs in the shadow), create one opaque `"Busy"` event per block (no title detail, description, location, or attendees), and store the new shadow.

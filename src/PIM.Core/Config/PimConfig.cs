@@ -43,7 +43,8 @@ public sealed record CalendarSourceConfig(
     CalendarType Type,
     string? Url,
     string? Color = null,
-    bool? FreebusySink = null
+    bool? FreebusySink = null,
+    bool? FreebusyIgnoreAllDay = null
 );
 
 public sealed record UiConfig(

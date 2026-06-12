@@ -43,6 +43,9 @@ accounts:
         type: caldav
         url: "https://radicale.example.com/user/busyfree/"
         freebusy_sink: true
+        # Optional: exclude all-day events from this sink's aggregation. Useful
+        # when birthday/holiday calendars mark their events busy at the source.
+        # freebusy_ignore_all_day: true
 
 ui:
   timezone_primary: "America/New_York"

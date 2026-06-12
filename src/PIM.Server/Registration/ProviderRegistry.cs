@@ -11,7 +11,7 @@ using PIM.Sync.Imap;
 
 namespace PIM.Server.Registration;
 
-public sealed record SinkInfo(string AccountId, string CalendarId, ICalendarProvider Provider);
+public sealed record SinkInfo(string AccountId, string CalendarId, ICalendarProvider Provider, bool IgnoreAllDay = false);
 
 public class ProviderRegistry
 {
@@ -279,7 +279,7 @@ public class ProviderRegistry
         _calendarProviders[account.Id] = [calendarProvider];
 
         foreach (var sink in account.Calendars?.Where(c => c.FreebusySink == true) ?? [])
-            _sinkProviders[SinkKey(account.Id, sink.Id)] = new SinkInfo(account.Id, sink.Id, calendarProvider);
+            _sinkProviders[SinkKey(account.Id, sink.Id)] = new SinkInfo(account.Id, sink.Id, calendarProvider, sink.FreebusyIgnoreAllDay == true);
     }
 
     private void BuildGraphProviders(
@@ -310,7 +310,7 @@ public class ProviderRegistry
         _calendarProviders[account.Id] = [calendarProvider];
 
         foreach (var sink in account.Calendars?.Where(c => c.FreebusySink == true) ?? [])
-            _sinkProviders[SinkKey(account.Id, sink.Id)] = new SinkInfo(account.Id, sink.Id, calendarProvider);
+            _sinkProviders[SinkKey(account.Id, sink.Id)] = new SinkInfo(account.Id, sink.Id, calendarProvider, sink.FreebusyIgnoreAllDay == true);
     }
 
     private async Task BuildImapProvidersAsync(
@@ -384,7 +384,7 @@ public class ProviderRegistry
                     httpClient, loggerFactory.CreateLogger<CalDavCalendarProvider>());
 
                 if (calConfig.FreebusySink == true)
-                    _sinkProviders[SinkKey(account.Id, calConfig.Id)] = new SinkInfo(account.Id, calConfig.Id, provider);
+                    _sinkProviders[SinkKey(account.Id, calConfig.Id)] = new SinkInfo(account.Id, calConfig.Id, provider, calConfig.FreebusyIgnoreAllDay == true);
                 else
                     calendars.Add(provider);
             }
@@ -408,6 +408,6 @@ public class ProviderRegistry
         _calendarProviders[account.Id] = [provider];
 
         foreach (var sink in account.Calendars?.Where(c => c.Type == CalendarType.EventKit && c.FreebusySink == true) ?? [])
-            _sinkProviders[SinkKey(account.Id, sink.Id)] = new SinkInfo(account.Id, sink.Id, provider);
+            _sinkProviders[SinkKey(account.Id, sink.Id)] = new SinkInfo(account.Id, sink.Id, provider, sink.FreebusyIgnoreAllDay == true);
     }
 }

@@ -276,6 +276,36 @@ public class FreeBusySinkServiceTests
         await sinkProvider.Received(1).CreateEventAsync(Arg.Any<CalendarEvent>(), Arg.Any<CancellationToken>());
     }
 
+    [Fact]
+    public async Task RefreshAsync_IgnoreAllDaySink_ExcludesAllDayEvents()
+    {
+        var registry = Substitute.For<ProviderRegistry>(NullLogger<ProviderRegistry>.Instance);
+        var calendarRepo = Substitute.For<ICalendarRepository>();
+        var syncStateRepo = Substitute.For<ISyncStateRepository>();
+        var sinkProvider = Substitute.For<ICalendarProvider>();
+        registry.Sinks.Returns(new List<SinkInfo> { new("acc-1", "cal-sink", sinkProvider, IgnoreAllDay: true) });
+
+        var allDayStart = new DateTimeOffset(2026, 5, 11, 0, 0, 0, TimeSpan.Zero);
+        var events = new[]
+        {
+            Event("timed", BaseTime, BaseTime.AddHours(1)),
+            Event("allday", allDayStart, allDayStart.AddDays(1), allDay: true),
+        };
+        calendarRepo.GetEventsInRangeAsync(Arg.Any<DateTimeOffset>(), Arg.Any<DateTimeOffset>(), null, Arg.Any<CancellationToken>())
+            .Returns(events.ToList());
+        sinkProvider.CreateEventAsync(Arg.Any<CalendarEvent>(), Arg.Any<CancellationToken>()).Returns("id-1");
+
+        var svc = new FreeBusySinkService(registry, calendarRepo, syncStateRepo,
+            BuildPimConfig(), NullLogger<FreeBusySinkService>.Instance);
+
+        await svc.RefreshAsync(CancellationToken.None);
+
+        // Only the timed event produces a block; the all-day event is excluded.
+        await sinkProvider.Received(1).CreateEventAsync(
+            Arg.Is<CalendarEvent>(e => e.End - e.Start == TimeSpan.FromHours(1)),
+            Arg.Any<CancellationToken>());
+    }
+
     private static (FreeBusySinkService Svc, ProviderRegistry Registry, ICalendarRepository CalRepo, ISyncStateRepository SyncStateRepo, ICalendarProvider SinkProvider) BuildService()
     {
         var registry = Substitute.For<ProviderRegistry>(NullLogger<ProviderRegistry>.Instance);
