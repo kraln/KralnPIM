@@ -18,6 +18,7 @@
     <ProjectReference Include="..\PIM.Sync.Imap\PIM.Sync.Imap.csproj" />
     <ProjectReference Include="..\PIM.Sync.Graph\PIM.Sync.Graph.csproj" />
     <ProjectReference Include="..\PIM.Sync.CalDav\PIM.Sync.CalDav.csproj" />
+    <ProjectReference Include="..\PIM.Sync.EventKit\PIM.Sync.EventKit.csproj" />
     <ProjectReference Include="..\PIM.SystemInfo\PIM.SystemInfo.csproj" />
   </ItemGroup>
 
