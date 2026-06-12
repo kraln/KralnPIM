@@ -144,6 +144,40 @@ public class CalDavEventMapperTests
     }
 
     [Fact]
+    public void ToCalendarEvent_TransparentEvent_MapsToFree()
+    {
+        var evt = new ICalEvent
+        {
+            Uid = "evt-free",
+            Summary = "Birthday",
+            Transparency = TransparencyType.Transparent,
+            DtStart = new CalDateTime(2024, 1, 1, 9, 0, 0, "UTC"),
+            DtEnd = new CalDateTime(2024, 1, 1, 10, 0, 0, "UTC"),
+        };
+
+        var result = CalDavEventMapper.ToCalendarEvent(evt, AccountId, CalendarId);
+
+        Assert.Equal(Transparency.Free, result.Transparency);
+    }
+
+    [Fact]
+    public void ToCalendarEvent_OpaqueEvent_MapsToBusy()
+    {
+        var evt = new ICalEvent
+        {
+            Uid = "evt-busy",
+            Summary = "Meeting",
+            Transparency = TransparencyType.Opaque,
+            DtStart = new CalDateTime(2024, 1, 1, 9, 0, 0, "UTC"),
+            DtEnd = new CalDateTime(2024, 1, 1, 10, 0, 0, "UTC"),
+        };
+
+        var result = CalDavEventMapper.ToCalendarEvent(evt, AccountId, CalendarId);
+
+        Assert.Equal(Transparency.Busy, result.Transparency);
+    }
+
+    [Fact]
     public void ToCalendarEvent_WithAttendees_ExtractsEmails()
     {
         var evt = new ICalEvent

@@ -36,7 +36,10 @@ public static class GraphCalendarMapper
             Location: evt.Location?.DisplayName,
             Invitees: invitees,
             RecurrenceRule: recurrenceRule,
-            Status: status
+            Status: status,
+            Transparency: evt.ShowAs == Microsoft.Graph.Models.FreeBusyStatus.Free
+                ? Transparency.Free
+                : Transparency.Busy
         );
     }
 

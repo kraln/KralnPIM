@@ -70,6 +70,7 @@ Copy `config.example.yaml` to `~/.pim/config.yaml` and fill in your account deta
 - **Real-time sync**: WebSocket push for mail, calendar, and account status changes
 - **Dashboard**: Upcoming agenda, weather, power, world clocks, mail overview
 - **Calendar**: 4-day timeline with weather forecasts, now line, sunrise/sunset markers, all-day event banner row, event creation/editing, left/right day navigation
+- **Free/busy sink**: Aggregate the busy/free state of every calendar into a single anonymized destination calendar. Each source event becomes an opaque "Busy" block (no title, location, or attendees); overlapping and near-adjacent blocks are merged. Events marked free (birthdays, working-location markers, transparent holidays) are excluded.
 - **Email**: Inbox with read/unread/flagged filters, search, compose/reply, attachments
 - **Setup wizard**: Guided account configuration with OAuth flows, connection testing, calendar discovery, SSL error bypass
 - **System info**: Battery/power (Linux `/sys/`), weather (Open-Meteo), multi-timezone clocks

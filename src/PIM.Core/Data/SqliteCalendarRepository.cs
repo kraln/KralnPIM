@@ -28,10 +28,10 @@ public sealed class SqliteCalendarRepository : ICalendarRepository
                 INSERT OR REPLACE INTO calendar_events
                 (event_id, account_id, calendar_id, summary, description,
                  start_time, end_time, is_all_day, location, invitees,
-                 recurrence_rule, status, synced_at)
+                 recurrence_rule, status, transparency, synced_at)
                 VALUES (@eid, @aid, @cid, @sum, @desc,
                         @start, @end, @allDay, @loc, @inv,
-                        @rrule, @status, @synced)
+                        @rrule, @status, @transparency, @synced)
                 """;
             cmd.Parameters.AddWithValue("@eid", evt.EventId);
             cmd.Parameters.AddWithValue("@aid", evt.AccountId);
@@ -45,6 +45,7 @@ public sealed class SqliteCalendarRepository : ICalendarRepository
             cmd.Parameters.AddWithValue("@inv", JsonSerializer.Serialize(evt.Invitees, PimJsonContext.Default.ListString));
             cmd.Parameters.AddWithValue("@rrule", (object?)evt.RecurrenceRule ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@status", evt.Status.ToString());
+            cmd.Parameters.AddWithValue("@transparency", evt.Transparency.ToString());
             cmd.Parameters.AddWithValue("@synced", DateTimeOffset.UtcNow.ToString("O"));
 
             await cmd.ExecuteNonQueryAsync(ct);
@@ -142,7 +143,8 @@ public sealed class SqliteCalendarRepository : ICalendarRepository
             Location: reader.IsDBNull(reader.GetOrdinal("location")) ? null : reader.GetString(reader.GetOrdinal("location")),
             Invitees: DeserializeList(reader, "invitees"),
             RecurrenceRule: reader.IsDBNull(reader.GetOrdinal("recurrence_rule")) ? null : reader.GetString(reader.GetOrdinal("recurrence_rule")),
-            Status: Enum.Parse<EventStatus>(reader.GetString(reader.GetOrdinal("status")))
+            Status: Enum.Parse<EventStatus>(reader.GetString(reader.GetOrdinal("status"))),
+            Transparency: Enum.Parse<Transparency>(reader.GetString(reader.GetOrdinal("transparency")))
         );
     }
 

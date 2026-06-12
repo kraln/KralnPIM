@@ -31,7 +31,10 @@ public static class CalendarMapper
             Location: evt.Location,
             Invitees: invitees,
             RecurrenceRule: recurrenceRule,
-            Status: status
+            Status: status,
+            Transparency: string.Equals(evt.Transparency, "transparent", StringComparison.OrdinalIgnoreCase)
+                ? Transparency.Free
+                : Transparency.Busy
         );
     }
 

@@ -63,6 +63,40 @@ public class CalendarMapperTests
     }
 
     [Fact]
+    public void ToCalendarEvent_TransparentEvent_MapsToFree()
+    {
+        var evt = new GoogleEvent
+        {
+            Id = "evt-free",
+            Summary = "Birthday",
+            Transparency = "transparent",
+            Start = new GoogleEventDateTime { DateTimeDateTimeOffset = DateTimeOffset.UtcNow },
+            End = new GoogleEventDateTime { DateTimeDateTimeOffset = DateTimeOffset.UtcNow.AddHours(1) },
+        };
+
+        var result = CalendarMapper.ToCalendarEvent(evt, AccountId, CalendarId);
+
+        Assert.Equal(Transparency.Free, result.Transparency);
+    }
+
+    [Fact]
+    public void ToCalendarEvent_OpaqueOrUnsetTransparency_MapsToBusy()
+    {
+        var evt = new GoogleEvent
+        {
+            Id = "evt-busy",
+            Summary = "Meeting",
+            // Transparency unset → Google treats as opaque (busy)
+            Start = new GoogleEventDateTime { DateTimeDateTimeOffset = DateTimeOffset.UtcNow },
+            End = new GoogleEventDateTime { DateTimeDateTimeOffset = DateTimeOffset.UtcNow.AddHours(1) },
+        };
+
+        var result = CalendarMapper.ToCalendarEvent(evt, AccountId, CalendarId);
+
+        Assert.Equal(Transparency.Busy, result.Transparency);
+    }
+
+    [Fact]
     public void ToCalendarEvent_TentativeStatus_Maps()
     {
         var evt = new GoogleEvent

@@ -35,7 +35,10 @@ internal static class EventKitEventMapper
             Location: dto.Location,
             Invitees: invitees,
             RecurrenceRule: null,
-            Status: MapStatus(dto.Status)
+            Status: MapStatus(dto.Status),
+            Transparency: string.Equals(dto.Availability, "free", StringComparison.OrdinalIgnoreCase)
+                ? Transparency.Free
+                : Transparency.Busy
         );
     }
 

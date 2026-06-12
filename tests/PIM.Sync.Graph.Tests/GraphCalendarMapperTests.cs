@@ -59,6 +59,44 @@ public class GraphCalendarMapperTests
     }
 
     [Fact]
+    public void ToCalendarEvent_ShowAsFree_MapsToFree()
+    {
+        var evt = new GraphEvent
+        {
+            Id = "evt-free",
+            Subject = "Working elsewhere marker",
+            ShowAs = Microsoft.Graph.Models.FreeBusyStatus.Free,
+            Start = new GraphDateTimeTimeZone { DateTime = "2024-06-15T10:00:00.0000000", TimeZone = "UTC" },
+            End = new GraphDateTimeTimeZone { DateTime = "2024-06-15T11:00:00.0000000", TimeZone = "UTC" },
+        };
+
+        var result = GraphCalendarMapper.ToCalendarEvent(evt, AccountId, CalendarId);
+
+        Assert.Equal(Transparency.Free, result.Transparency);
+    }
+
+    [Theory]
+    [InlineData(Microsoft.Graph.Models.FreeBusyStatus.Busy)]
+    [InlineData(Microsoft.Graph.Models.FreeBusyStatus.Tentative)]
+    [InlineData(Microsoft.Graph.Models.FreeBusyStatus.Oof)]
+    [InlineData(null)]
+    public void ToCalendarEvent_ShowAsNonFree_MapsToBusy(Microsoft.Graph.Models.FreeBusyStatus? showAs)
+    {
+        var evt = new GraphEvent
+        {
+            Id = "evt-busy",
+            Subject = "Meeting",
+            ShowAs = showAs,
+            Start = new GraphDateTimeTimeZone { DateTime = "2024-06-15T10:00:00.0000000", TimeZone = "UTC" },
+            End = new GraphDateTimeTimeZone { DateTime = "2024-06-15T11:00:00.0000000", TimeZone = "UTC" },
+        };
+
+        var result = GraphCalendarMapper.ToCalendarEvent(evt, AccountId, CalendarId);
+
+        Assert.Equal(Transparency.Busy, result.Transparency);
+    }
+
+    [Fact]
     public void ToCalendarEvent_AllDayEvent_MapsCorrectly()
     {
         var evt = new GraphEvent

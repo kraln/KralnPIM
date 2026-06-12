@@ -12,5 +12,6 @@ public sealed record CalendarEvent(
     string? Location,
     List<string> Invitees,
     string? RecurrenceRule,
-    EventStatus Status
+    EventStatus Status,
+    Transparency Transparency = Transparency.Busy
 );

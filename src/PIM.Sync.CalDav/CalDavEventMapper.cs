@@ -38,7 +38,10 @@ public static class CalDavEventMapper
             Location: icalEvent.Location,
             Invitees: invitees,
             RecurrenceRule: recurrenceRule,
-            Status: status
+            Status: status,
+            Transparency: icalEvent.Transparency == TransparencyType.Transparent
+                ? Transparency.Free
+                : Transparency.Busy
         );
     }
 

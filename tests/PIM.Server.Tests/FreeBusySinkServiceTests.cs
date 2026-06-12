@@ -19,8 +19,9 @@ public class FreeBusySinkServiceTests
     private static CalendarEvent Event(
         string id, DateTimeOffset start, DateTimeOffset end,
         bool allDay = false, EventStatus status = EventStatus.Confirmed,
-        string accountId = "acc-1", string calendarId = "cal-source") =>
-        new(id, accountId, calendarId, "Source", null, start, end, allDay, null, [], null, status);
+        string accountId = "acc-1", string calendarId = "cal-source",
+        Transparency transparency = Transparency.Busy) =>
+        new(id, accountId, calendarId, "Source", null, start, end, allDay, null, [], null, status, transparency);
 
     private static FreeBusySinkService.BusyBlock Block(DateTimeOffset start, DateTimeOffset end) => new(start, end);
 
@@ -254,6 +255,25 @@ public class FreeBusySinkServiceTests
         await svc.RefreshAsync(CancellationToken.None);
 
         await sinkB.Received(1).CreateEventAsync(Arg.Any<CalendarEvent>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task RefreshAsync_FreeSourceEvents_AreExcluded()
+    {
+        var (svc, registry, calendarRepo, syncStateRepo, sinkProvider) = BuildService();
+        var events = new[]
+        {
+            Event("a", BaseTime, BaseTime.AddHours(1)),
+            Event("birthday", BaseTime.AddHours(2), BaseTime.AddHours(3), transparency: Transparency.Free),
+        };
+        calendarRepo.GetEventsInRangeAsync(Arg.Any<DateTimeOffset>(), Arg.Any<DateTimeOffset>(), null, Arg.Any<CancellationToken>())
+            .Returns(events.ToList());
+        sinkProvider.CreateEventAsync(Arg.Any<CalendarEvent>(), Arg.Any<CancellationToken>()).Returns("id-1");
+
+        await svc.RefreshAsync(CancellationToken.None);
+
+        // Only the busy event produces a block; the free event is filtered out.
+        await sinkProvider.Received(1).CreateEventAsync(Arg.Any<CalendarEvent>(), Arg.Any<CancellationToken>());
     }
 
     private static (FreeBusySinkService Svc, ProviderRegistry Registry, ICalendarRepository CalRepo, ISyncStateRepository SyncStateRepo, ICalendarProvider SinkProvider) BuildService()

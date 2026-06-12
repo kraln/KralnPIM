@@ -27,7 +27,8 @@ public class SqliteCalendarRepositoryTests : IDisposable
         string? location = "Room A",
         List<string>? invitees = null,
         string? recurrenceRule = null,
-        EventStatus status = EventStatus.Confirmed)
+        EventStatus status = EventStatus.Confirmed,
+        Transparency transparency = Transparency.Busy)
     {
         var s = start ?? new DateTimeOffset(2025, 1, 6, 9, 0, 0, TimeSpan.Zero);
         return new CalendarEvent(
@@ -42,7 +43,8 @@ public class SqliteCalendarRepositoryTests : IDisposable
             Location: location,
             Invitees: invitees ?? ["alice@example.com"],
             RecurrenceRule: recurrenceRule,
-            Status: status
+            Status: status,
+            Transparency: transparency
         );
     }
 
@@ -58,6 +60,22 @@ public class SqliteCalendarRepositoryTests : IDisposable
         Assert.Equal("evt-001", results[0].EventId);
         Assert.Equal("Test Event", results[0].Summary);
         Assert.Equal(EventStatus.Confirmed, results[0].Status);
+    }
+
+    [Fact]
+    public async Task UpsertEvents_Transparency_RoundTrips()
+    {
+        await _repo.UpsertEventsAsync([
+            MakeEvent(eventId: "busy-evt", transparency: Transparency.Busy),
+            MakeEvent(eventId: "free-evt", transparency: Transparency.Free),
+        ]);
+
+        var results = await _repo.GetEventsInRangeAsync(
+            new DateTimeOffset(2025, 1, 6, 0, 0, 0, TimeSpan.Zero),
+            new DateTimeOffset(2025, 1, 7, 0, 0, 0, TimeSpan.Zero));
+
+        Assert.Equal(Transparency.Busy, results.Single(e => e.EventId == "busy-evt").Transparency);
+        Assert.Equal(Transparency.Free, results.Single(e => e.EventId == "free-evt").Transparency);
     }
 
     [Fact]

@@ -35,6 +35,14 @@ accounts:
       - id: "family"
         type: caldav
         url: "https://radicale.example.com/user/family.ics"
+      # A free/busy sink: a dedicated, otherwise-empty calendar the daemon
+      # overwrites with anonymized "Busy" blocks aggregated from every other
+      # (non-sink) calendar across all accounts. Create the collection first
+      # (e.g. via MKCALENDAR); the daemon owns its contents thereafter.
+      - id: "busyfree"
+        type: caldav
+        url: "https://radicale.example.com/user/busyfree/"
+        freebusy_sink: true
 
 ui:
   timezone_primary: "America/New_York"

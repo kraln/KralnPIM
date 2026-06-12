@@ -156,7 +156,9 @@ public enum AccountType { Imap, Google, Office365, CalDav }
 public sealed record CalendarSourceConfig(
     string Id,
     CalendarType Type,         // enum: CalDav, Google, Office365
-    string? Url
+    string? Url,
+    string? Color = null,
+    bool? FreebusySink = null  // true → daemon overwrites this calendar with an aggregated busy/free view (see H.7)
 );
 ```
 
@@ -208,10 +210,13 @@ public sealed record CalendarEvent(
     string? Location,
     List<string> Invitees,
     string? RecurrenceRule,     // RRULE string or null
-    EventStatus Status          // enum: Confirmed, Tentative, Cancelled
+    EventStatus Status,         // enum: Confirmed, Tentative, Cancelled
+    Transparency Transparency = Transparency.Busy  // free/busy state; see H.7
 );
 
 public enum EventStatus { Confirmed, Tentative, Cancelled }
+
+public enum Transparency { Busy, Free }
 
 // --- Auth ---
 public sealed record OAuthToken(
@@ -269,6 +274,7 @@ CREATE TABLE calendar_events (
     invitees         TEXT,       -- JSON array
     recurrence_rule  TEXT,
     status           TEXT NOT NULL DEFAULT 'Confirmed',
+    transparency     TEXT NOT NULL DEFAULT 'Busy',
     synced_at        TEXT NOT NULL
 );
 
@@ -764,7 +770,8 @@ Connect to `ws://127.0.0.1:9401/ws`. Server pushes JSON events:
 - On each tick per account:
   1. Call `IMailProvider.SyncMailAsync()` → upsert results to DB → push WebSocket event.
   2. Call `ICalendarProvider.SyncEventsAsync()` → upsert results to DB → push WebSocket event.
-  3. Call `PurgeOlderThanAsync()` on repos to trim the buffer window.
+  3. Refresh any free/busy sinks (see H.7).
+  4. Call `PurgeOlderThanAsync()` on repos to trim the buffer window.
 - Handle auth failures by logging an error and marking the account as offline (push `status.change`).
 - Handle network failures with retry (3 attempts with exponential backoff), then mark offline.
 
@@ -783,7 +790,23 @@ Connect to `ws://127.0.0.1:9401/ws`. Server pushes JSON events:
 - When an account goes offline, the REST API continues serving local data but returns `503` for write operations targeting that account.
 - The TUI reads the `status.change` WebSocket events to display `[OFFLINE]` indicators.
 
-#### H.7 Acceptance Criteria
+#### H.7 Free/Busy Sink
+
+A **sink** is a calendar flagged with `freebusy_sink: true` in config. The daemon treats it not as a source of events to read, but as a destination it overwrites with an anonymized busy/free view aggregated from every other calendar.
+
+On each sink refresh:
+
+1. **Gather.** Read all events in the buffer window (`buffer_months_back` … `buffer_months_forward`) across every account.
+2. **Filter.** Drop cancelled events, events that are themselves on a sink calendar (so sinks never feed each other), and events whose `Transparency` is `Free`.
+3. **Coalesce.** Sort the remaining intervals and merge them: overlapping intervals combine, and intervals separated by no more than a 5-minute bridge gap join into one block. All-day events expand to full local days in the primary timezone.
+4. **Diff.** Compute a SHA-256 hash over the block boundaries. A shadow record — the hash plus the IDs of the events last created on the sink — is persisted via `ISyncStateRepository` under `freebusy-sink:{calendarId}`. If the hash is unchanged, the refresh is a no-op (no provider calls).
+5. **Rewrite.** On a hash change, delete the previously created events (by the IDs in the shadow), create one opaque `"Busy"` event per block (no title detail, description, location, or attendees), and store the new shadow.
+
+The sink calendar must exist and be dedicated to this purpose — the daemon owns its contents and deletes the events it previously created. Created-event UIDs are not stable across refreshes.
+
+**Transparency source.** `CalendarEvent.Transparency` (`Busy`/`Free`) is populated by each provider's mapper from its native free/busy field — iCal `TRANSP` (CalDAV), Google `transparency`, Graph `showAs`, EventKit availability. Only an explicitly-free value maps to `Free`; anything else (opaque, tentative, out-of-office, unknown, or absent) maps to `Busy`.
+
+#### H.8 Acceptance Criteria
 
 - [ ] Daemon starts, runs migrations, completes auth flows, and begins syncing.
 - [ ] REST API returns correct data for all endpoints.
@@ -791,6 +814,7 @@ Connect to `ws://127.0.0.1:9401/ws`. Server pushes JSON events:
 - [ ] Sync scheduler runs at the configured interval without drift or memory leaks.
 - [ ] An account going offline is detected, logged, and communicated via WebSocket within 30 seconds.
 - [ ] Write operations return 503 when the target account is offline.
+- [ ] A free/busy sink reflects busy blocks from all source calendars, excludes free events, and is a no-op when nothing changed.
 
 ---
 

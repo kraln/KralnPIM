@@ -50,6 +50,7 @@ public sealed class FreeBusySinkService
         var sinkKeys = sinks.Select(s => (s.AccountId, s.CalendarId)).ToHashSet();
         var sourceEvents = allEvents
             .Where(e => e.Status != EventStatus.Cancelled)
+            .Where(e => e.Transparency != Transparency.Free)
             .Where(e => !sinkKeys.Contains((e.AccountId, e.CalendarId)))
             .ToList();
 
