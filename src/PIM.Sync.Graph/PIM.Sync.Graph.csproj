@@ -14,6 +14,9 @@
     <PackageReference Include="Microsoft.Graph" Version="5.103.0" />
     <PackageReference Include="Microsoft.Identity.Client" Version="4.82.1" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.3" />
+    <!-- Direct ref to override Microsoft.Graph's transitive pin; floors the
+         version above GHSA-7j59-v9qr-6fq9 (RedirectHandler header leak). -->
+    <PackageReference Include="Microsoft.Kiota.Abstractions" Version="1.22.0" />
   </ItemGroup>
 
   <ItemGroup>
